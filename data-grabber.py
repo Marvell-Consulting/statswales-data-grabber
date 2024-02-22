@@ -7,8 +7,8 @@ import argparse
 
 welsh = False
 initalRequestUrl = "http://open.statswales.gov.wales/en-gb/dataset/XXXX0000"
-englistBaseRequestUrl = "http://open.statswales.gov.wales/"
-welshBaseRequestUrl = "http://agored.statscymru.llyw.cymru/"
+englistBaseRequestUrl = "http://open.statswales.gov.wales"
+welshBaseRequestUrl = "http://agored.statscymru.llyw.cymru"
 outputfile = "out.csv"
 datasetID = "XXXX0000".lower()
 
@@ -58,8 +58,8 @@ def main(argv):
 
     if args.dataset:
         datasetID = args.dataset.lower()
-        englistInitalRequestUrl = f"{englistBaseRequestUrl}/{datasetID}"
-        welshInitalRequestUrl = f"{welshBaseRequestUrl}/{datasetID}"
+        englistInitalRequestUrl = f"{englistBaseRequestUrl}/en-gb/dataset/{datasetID}"
+        welshInitalRequestUrl = f"{welshBaseRequestUrl}/dataset/{datasetID}"
         if args.welsh:
             initalRequestUrl = welshInitalRequestUrl
         else:
@@ -77,9 +77,9 @@ def main(argv):
         initalRequestUrl = args.url
         datasetID = initalRequestUrl.split("/")[-1].lower()
         if welsh:
-            englistInitalRequestUrl = f"{englistBaseRequestUrl}/{datasetID}"
+            englistInitalRequestUrl = f"{englistBaseRequestUrl}/en-gb/dataset/{datasetID}"
         else:
-            welshInitalRequestUrl = f"{welshBaseRequestUrl}/{datasetID}"
+            welshInitalRequestUrl = f"{welshBaseRequestUrl}/dataset/{datasetID}"
     else:
         parser.print_help()
         sys.exit(2)
