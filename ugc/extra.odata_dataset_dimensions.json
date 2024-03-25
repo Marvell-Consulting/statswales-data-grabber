@@ -1,0 +1,88 @@
+{
+  "odata.metadata":"http://open.statswales.gov.wales/en-GB/discover/$metadata#datasetdimensions","value":[
+    {
+      "SemanticKey":"","Dataset":"hous1201",
+        "DimensionName_ENG":"Area","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Area","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },{
+      "SemanticKey":"","Dataset":"hous1201",
+        "DimensionName_ENG":"Renewal","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Renewal","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"hous1201",
+        "DimensionName_ENG":"Expenditure","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Expenditure","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"hous1201",
+        "DimensionName_ENG":"Year","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Year","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"Geog\\LocAuth","Dataset":"educ0157",
+        "DimensionName_ENG":"Region of domicile","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Region of domicile","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0157",
+        "DimensionName_ENG":"Delivery medium","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Delivery medium","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0157",
+        "DimensionName_ENG":"Provider","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Provider","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0157",
+        "DimensionName_ENG":"Learning aim","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Learning aim","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0157",
+        "DimensionName_ENG":"Sector subject area","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Sector subject area","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"Time\\AcYr","Dataset":"educ0157",
+        "DimensionName_ENG":"Academic year","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Academic year","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Region of domicile","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Region of domicile","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Programme type","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Programme type","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Gender","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Gender","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Age group","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Age group","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Deprivation decile","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Deprivation decile","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Welsh fluency","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Welsh fluency","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    },
+		{
+      "SemanticKey":"","Dataset":"educ0193",
+        "DimensionName_ENG":"Academic year","DatasetDescription_ENG":"","DatasetURI_ENG":"","DatasetDimensionURI_ENG":"","Notes_ENG":"Added by spider.py","ExternalURI_ENG":"",
+        "DimensionName_WEL":"Academic year","DatasetDescription_WEL":"","DatasetURI_WEL":"","DatasetDimensionURI_WEL":"","Notes_WEL":"Added by spider.py","ExternalURI_WEL":""
+    }
+  ]
+}
