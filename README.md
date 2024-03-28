@@ -33,3 +33,19 @@ Typical usage is:
 ```
 ./data-grabber.py -d EDUC0107
 ```
+
+# spider and statswales hypercube (metadata)
+
+Code to extract all the publically available StatsWales2 metadata and populate an sqlite database (spider.py)
+Also includes the schema in sql form, along with the E-R diagaram as an svg file and also in dbml format, can also be viewed here:
+[External link to dbdiagram.io](https://dbdiagram.io/d/StatsWales-E-R-diagram-6508558f02bd1c4a5ec93987)
+
+## Running spider.py
+
+Input following commands to python to output an sqlite database:
+
+        import spider
+        spider.initialise()
+        spider.purge_database()
+        spider.initialise()
+        spider.load_all()
