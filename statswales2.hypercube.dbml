@@ -1,0 +1,221 @@
+Table "odata_catalogue" {
+    dataset text [not null]
+    partition_key text [not null]
+    row_key int [not null]
+    folder_path text [not null]
+    indexes {
+        (dataset, partition_key, row_key) [pk] 
+    }
+}
+
+Table "odata_catalogue_info" {
+    dataset text [not null]
+    partition_key text [not null]
+    row_key int [not null]
+    lang text [not null]
+    dataset_uri text [not null]
+    indexes {
+        (dataset, partition_key, row_key, lang) [pk] 
+    }
+}
+
+Table "odata_dataset_dimension" {
+    dataset text [not null]
+    dimension text [not null]
+    dimension_index int [not null]
+    semantic_key text
+    indexes {
+        (dataset, dimension) [pk]
+    }
+}
+
+Table "odata_dataset_dimension_info" {
+    dataset text [not null]
+    dimension_index int [not null]
+    lang text [not null]
+    dimension_localised text
+    dimension_name text
+    description text
+    dataset_uri text
+    dataset_dimension_uri text
+    notes text
+    external_uri text
+    indexes {
+        (dataset, dimension_index, lang) [pk] 
+    }
+}
+
+Table "odata_dataset_dimension_item" {
+    dataset text [not null]
+    dimension text [not null]
+    item text [not null]
+    item_index int [not null]
+    hierarchy text
+    sort_order int
+    semantic_key text
+    indexes {
+        (dataset, dimension, item, item_index) [pk]
+    }
+}
+
+Table "odata_dataset_dimension_item_alternative" {
+    dataset text [not null]
+    item_index int [not null]
+    alternative_index int [not null]
+    alternative_item text [not null]
+    indexes {
+        (dataset, item_index, alternative_index) [pk] 
+    }
+}
+
+Table "odata_dataset_dimension_item_info" {
+    dataset text [not null]
+    item_index int [not null]
+    lang text [not null]
+    dimension_localised text [not null]
+    description text
+    notes text
+    indexes {
+        (dataset, item_index, lang) [pk] 
+    }
+}
+
+Table "odata_dimension_item" {
+    semantic_key text [not null]
+    item text [not null]
+    hierarchy text
+    partition_key text
+    row_key int
+    etag text
+    indexes {
+        (semantic_key, item) [pk]
+    }
+}
+
+Table "odata_dimension_item_alternative" {
+    semantic_key text [not null]
+    item text [not null]
+    alternative_index int [not null]
+    alternative_item text [not null]
+    indexes {
+        (semantic_key, item, alternative_index) [pk]
+    }
+}
+
+Table "odata_dimension_item_info" {
+    semantic_key text [not null]
+    item text [not null]
+    lang text [not null]
+    description text [not null]
+    indexes {
+        (semantic_key, item, lang) [pk]
+    }
+}
+
+Table "odata_dimension_type" {
+    semantic_key text [pk]
+    type text [not null]
+    subtype text [not null]
+}
+
+Table "odata_dimension_type_info" {
+    semantic_key text [not null]
+    lang text [not null]
+    type_description text
+    subtype_description text
+    external_uri text
+    indexes {
+        (semantic_key, lang) [pk]
+    }
+}
+
+Table "odata_metadata_tag" {
+    dataset text [not null]
+    partition_key text [not null]
+    row_key text [not null]
+    lang text [not null]
+    tag_type text [not null]
+    tag text [not null]
+    desciption text [not null]
+    timestamp text
+    etag text
+    indexes {
+        (dataset, partition_key, row_key, lang) [pk]
+    }
+}
+
+Table "dataset_collection" {
+    dataset text [pk]
+    href text [not null]
+}
+
+Table "dataset_collection_info" {
+    dataset text [not null]
+    lang text [not null]
+    indexes {
+        (dataset, lang) [pk]
+    }
+}
+
+Table "dataset_property_measure" {
+    dataset text [pk]
+    measure_type text [not null]
+    measure_nullable int [not null]
+    rowkey_type text [not null]
+    rowkey_nullable int [not null]
+    partitionkey_type text [not null]
+    partitionkey_nullable int [not null]
+}
+
+Table "dataset_property_dimension" {
+    dataset text [not null]
+    dimension text [not null]
+    code_type text [not null]
+    code_nullable int [not null]
+    item_name_type text [not null]
+    item_name_nullable int [not null]
+    sort_order_type text [not null]
+    sort_order_nullable int [not null]
+    hierarchy_type text [not null]
+    hierarchy_nullable int [not null]
+    item_notes_type text [not null]
+    item_notes_nullable int [not null]
+    indexes {
+        (dataset, dimension) [pk]
+    }
+}
+
+Table "dataset_property_dimension_alternative" {
+    dataset text [not null]
+    dimension text [not null]
+    alternative_index int [not null]
+    alternative_type text [not null]
+    alternative_nullable int [not null]
+    indexes {
+        (dataset, dimension, alternative_index) [pk]
+    }
+}
+
+
+
+Ref: odata_catalogue.dataset > dataset_collection.dataset
+Ref: odata_catalogue_info.(dataset, partition_key, row_key) > odata_catalogue.(dataset, partition_key, row_key)
+Ref: odata_catalogue_info.(dataset, lang) > dataset_collection_info.(dataset, lang)
+Ref: odata_dataset_dimension.dataset > dataset_collection.dataset
+Ref: odata_dataset_dimension.(dataset, dimension) > dataset_property_dimension.(dataset, dimension)
+Ref: odata_dataset_dimension_info.(dataset, dimension_index) > odata_dataset_dimension.(dataset, dimension_index)
+Ref: odata_dataset_dimension_info.(dataset, lang) > dataset_collection_info.(dataset, lang)
+Ref: odata_dataset_dimension_item.(dataset, dimension) > odata_dataset_dimension.(dataset, dimension)
+Ref: odata_dataset_dimension_item_info.(dataset, item_index) > odata_dataset_dimension_item.(dataset, item_index)
+Ref: odata_dataset_dimension_item_info.(dataset, lang) > dataset_collection_info.(dataset, lang)
+Ref: odata_dataset_dimension_item_alternative.(dataset, item_index) > odata_dataset_dimension_item.(dataset, item_index)
+Ref: odata_dimension_item_alternative.(semantic_key, item) > odata_dimension_item.(semantic_key, item)
+Ref: odata_dimension_item_info.(semantic_key, item) > odata_dimension_item.(semantic_key, item)
+Ref: odata_dimension_type_info.semantic_key > odata_dimension_type.semantic_key
+Ref: odata_metadata_tag.(dataset, lang) > dataset_collection_info.(dataset, lang)
+Ref: odata_dimension_item.semantic_key > odata_dimension_type.semantic_key
+Ref: dataset_collection_info.dataset > dataset_collection.dataset
+Ref: dataset_property_measure.dataset > dataset_collection.dataset
+Ref: dataset_property_dimension.dataset > dataset_collection.dataset
+Ref: dataset_property_dimension_alternative.(dataset, dimension) > dataset_property_dimension.(dataset, dimension)
+Ref: odata_dataset_dimension.semantic_key > odata_dimension_type.semantic_key
