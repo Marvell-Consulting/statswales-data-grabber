@@ -1246,30 +1246,34 @@ def make_autoincrement(n):
 # more.
 def load_json_pages(local_file, cursor, insert_procs):
 
-    filename = from_ugc(local_file["filename"])
+    more = True
 
-    content_type = parse_content_type(local_file["content-type"])
-    mime_type    = content_type[0]
-    options      = content_type[1]
+    while (more):
 
-    if (mime_type != "application/json"):
-        raise AssertionError("load_odata_catalogue: Expected mime-type of application/json but %s has %s!" % (filename, content_type))
+        filename = from_ugc(local_file["filename"])
 
-    tree = {}
-    with open(filename, 'rb') as fd:
-        tree = json.load(fd)
+        content_type = parse_content_type(local_file["content-type"])
+        mime_type    = content_type[0]
+        options      = content_type[1]
 
-    value = tree["value"]
-    more  = tree.get("odata.nextLink", False)
+        if (mime_type != "application/json"):
+            raise AssertionError("load_odata_catalogue: Expected mime-type of application/json but %s has %s!" % (filename, content_type))
 
-    # Insert the correct data from each value into each table.
-    for p in insert_procs:
-        for v in value:
-            p(cursor, v)
+        tree = {}
+        with open(filename, 'rb') as fd:
+            tree = json.load(fd)
 
-    # Carry on with the next page.
-    if (more):
-        load_json_pages(fetch_uri(more), cursor, insert_procs)  # Oops! No TCO in Python.
+        value = tree["value"]
+        more  = tree.get("odata.nextLink", False)
+
+        # Insert the correct data from each value into each table.
+        for p in insert_procs:
+            for v in value:
+                p(cursor, v)
+
+        # Carry on with the next page.
+        if (more):
+            local_file = fetch_uri(more)
 
 
 # Loads the dataset_collection table.
