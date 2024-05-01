@@ -7,8 +7,8 @@
 # Spider the Open Data URL hierarchy of StatsWales2 so that we can build some
 # inspectors and other tools to explore what's there.
 #
-# Finds metadata about the different StatsWales2 datacubes and loads it into an
-# sqlite3 database.
+# Finds data and metadata about the different StatsWales2 datacubes and loads
+# it into an sqlite3 database.
 #
 #
 #    To load the database initially:
@@ -17,7 +17,7 @@
 #    $ python3
 #    >>> import spider
 #    >>> spider.initialise()
-#    >>> spider.load_all()
+#    >>> spider.load_metadata()
 #    -----
 #
 #    To force a reload from cached downloads:
@@ -28,7 +28,7 @@
 #    >>> spider.initialise()
 #    >>> spider.purge_database()
 #    >>> spider.initialise()
-#    >>> spider.load_all()
+#    >>> spider.load_metadata()
 #    -----
 #
 #    To reload entirely from scratch:
@@ -41,6 +41,20 @@
 #    >>> import spider
 #    >>> spider.initialise()
 #    >>> spider.load_all()
+#    >>> spider.load_metadata()
+#    -----
+#
+#    To load all of the cube data (measure and dimension data from each
+#    dataset), first initialise the database using one of the methods above then:
+#
+#    -----
+#    >>> spider.load_datasets()
+#    -----
+#
+#    or, to load just a specific dataset:
+#
+#    -----
+#    >>> spider.load_dataset("agri0100", "agri0100")
 #    -----
 #
 #
@@ -1991,7 +2005,39 @@ def load_odata_dataset_dimension_items():
     c.execute("RELEASE load_odata_dataset_dimension_items")
 
 
-def load_all():
+# Loads the dataset_measure, dataset_dimension and
+# dataset_dimension_alternative tables for the specified dataset.
+# Succeeds or Throws.
+def load_dataset(dataset, href):
+
+    warn("load_dataset(%s)\n" % dataset)
+
+    c = db.cursor()
+    c.execute("SAVEPOINT load_dataset");
+
+    def load_from(local_file, lang, insert, check):
+
+        procs = []
+
+        # Don't load anything yet: just download (and cache) all the files.
+
+        load_json_pages(local_file, c, procs)
+
+
+    # For one language INSERT the language agnostic measure data and dimension
+    # codes and check the language specific dimension metadata. For every other
+    # language, check the language agnostic data and dimension codes and check
+    # the language specific dimension metadata.
+    load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", [], [])
+    load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], [])
+
+    c.execute("RELEASE load_dataset")
+
+
+def load_metadata():
+
+    warn("load_metadata()\n");
+
     load_dataset_collections()
     load_dataset_properties()
     load_odata_catalogue()
@@ -2000,6 +2046,36 @@ def load_all():
     load_odata_dimension_items()
     load_odata_dataset_dimensions()
     load_odata_dataset_dimension_items()
+
+
+def load_datasets():
+
+    warn("load_datasets()\n")
+
+    c = db.cursor()
+
+    # Download each cube that we expect OData for.
+    q = c.execute(SELECT("dataset_collection", ("dataset", "href",),
+        "WHERE `href` IS NOT NULL;"))
+
+    r = q.fetchone()
+    while (r):
+        load_dataset(r[0], r[1])
+        r = q.fetchone()
+
+    # Generate warnings for the cubes that don't have hrefs.
+    q = c.execute(SELECT("dataset_collection", ("dataset",),
+        "WHERE `href` NOT NULL;"))
+
+    r = q.fetchone()
+    while (r):
+        warn("load_datasets: Ignoring %s\n" % r[0])
+        r = q.fetchone()
+
+
+def load_all():
+    load_metadata()
+    load_datasets()
 
 
 
