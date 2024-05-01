@@ -75,7 +75,8 @@ import json
 ################################################################################
 ### Program State.
 
-db = None
+db   = None
+http = None
 
 
 
@@ -1079,7 +1080,7 @@ def fetch_uri(base, path=None):
         return local
 
     # Fetch the URI from the Internet.
-    response = requests.get(uri)
+    response = http.get(uri)
 
     # Cache the response body.
     filename = "temp-%d" % os.getpid()
@@ -1973,6 +1974,7 @@ def load_all():
 def initialise():
 
     global db
+    global http
 
     # Initialise the database.
 
@@ -2004,6 +2006,10 @@ def initialise():
 
     # Temporary files
     pathlib.Path("tmp/").mkdir(exist_ok=True)
+
+
+    # Initialise the HTTP Session.
+    http = requests.Session()
 
 
 def main(argv):
