@@ -75,8 +75,11 @@ import json
 ################################################################################
 ### Program State.
 
-db   = None
-http = None
+db        = None
+http      = None
+
+# Longest interval to wait between HTTP Requests that time out.
+retry_max = 512
 
 
 
@@ -1080,7 +1083,26 @@ def fetch_uri(base, path=None):
         return local
 
     # Fetch the URI from the Internet.
-    response = http.get(uri)
+    # Start with quite a large timeout because some of the metadata Responses
+    # are large, take the server a long time to generate and it seems that it
+    # doesn't start sending anything until it's generated the whole response.
+    retry_interval = 64
+    while True:
+        try:
+            # Set timeouts for connect() and read() to retry_interval.
+            response = http.get(uri, timeout = (retry_interval, retry_interval))
+            break
+        except requests.exceptions.ReadTimeout:
+            warn(" [TIMEOUT]\n")
+            warn("  HTTP Request timed out! Retrying in %d seconds...\n" % retry_interval)
+        except requests.exceptions.ConnectTimeout:
+            warn(" [TIMEOUT]\n")
+            warn("  TCP connect  timed out! Retrying in %d seconds...\n" % retry_interval)
+        time.sleep(retry_interval)
+        retry_interval *= 2
+        if (retry_interval > retry_max):
+            retry_interval = retry_max
+        warn("fetch_uri: %s" % pretty_uri)
 
     # Cache the response body.
     filename = "temp-%d" % os.getpid()
