@@ -1922,7 +1922,7 @@ def load_odata_dataset_dimension_items():
 
             odata_dataset_dimension_item_alternative_map = [
                     # The autoincrement counter will increment for every
-                    # candidate row even if lookup_require_no_empty decides to
+                    # candidate row even if lookup_require_not_empty decides to
                     # skip the row because INSERT and CHECK_ROW guarantee it to
                     # be so.
                     ("dataset",             lookup(),                  "Dataset"),
