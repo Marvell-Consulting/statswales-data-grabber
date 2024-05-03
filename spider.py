@@ -2048,7 +2048,10 @@ def load_metadata():
     load_odata_dataset_dimension_items()
 
 
-def load_datasets():
+# start_from can optionally specify a position in dataset_collection to start
+# from. This is useful when debugging load_dataset().
+# Depends on dataset_collection being loaded.
+def load_datasets(start_from = None):
 
     warn("load_datasets()\n")
 
@@ -2056,7 +2059,8 @@ def load_datasets():
 
     # Download each cube that we expect OData for.
     q = c.execute(SELECT("dataset_collection", ("dataset", "href",),
-        "WHERE `href` IS NOT NULL;"))
+        "WHERE `href` IS NOT NULL AND ((NULL IS ?) OR (`dataset` >= ?)) ORDER BY `dataset`;"),
+        (start_from, start_from))
 
     r = q.fetchone()
     while (r):
@@ -2065,7 +2069,8 @@ def load_datasets():
 
     # Generate warnings for the cubes that don't have hrefs.
     q = c.execute(SELECT("dataset_collection", ("dataset",),
-        "WHERE `href` NOT NULL;"))
+        "WHERE `href` IS NULL AND ((NULL IS ?) OR (`dataset` >= ?)) ORDER BY `dataset`;"),
+        (start_from, start_from))
 
     r = q.fetchone()
     while (r):
