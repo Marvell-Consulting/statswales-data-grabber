@@ -747,6 +747,51 @@ db_schema = [
         "	a.`lang` = 'cy-gb' AND\n"
         "	b.`dataset` IS NULL\n"
         ";\n",
+        #
+        # Measure and Dimension values
+        #   from
+        #     http://open.statswales.gov.wales/en-gb/dataset/<dataset>    (English)
+        #     and
+        #     http://agored.statscymru.llyw.cymru/cy-gb/dataset/<dataset> (Welsh)
+        #
+        # This table holds the measure value for a fact.
+        "CREATE TABLE `dataset_measure` (\n"
+        "`dataset`	TEXT NOT NULL,\n"
+        "`fact`	INTEGER NOT NULL,\n"
+        "`value`	NUMERIC,\n"
+        "PRIMARY KEY(`dataset`,`fact`)\n"
+        ") WITHOUT ROWID;\n",
+        #
+        # This table holds each dimension of a fact. It has to include
+        # hierarchy and sort_order because these do not always match the values
+        # in odata_dataset_dimension_item so we take the opportunity to use
+        # them to group and order the data by making them part of the PRIMARY
+        # KEY. We also include item_index so that we can find the description
+        # of the item in English and Welsh. Because we use WITHOUT ROWID this
+        # probably doesn't make the table much larger than it absolutely needs
+        # to be. Of course, this might (depending, for example, on whether this
+        # layout is fortuitously performant) be refactored (i.e. simplified to
+        # just dataset, dimension, item and fact) if we are able to clean some
+        # of the SW2 data.
+        "CREATE TABLE `dataset_dimension` (\n"
+        "`dataset`	TEXT NOT NULL,\n"
+        "`dimension`	TEXT NOT NULL,\n"
+        "`hierarchy`    TEXT NOT NULL,\n"
+        "`sort_order`   TEXT NOT NULL,\n"
+        "`item`	TEXT,\n"
+        "`item_index`	TEXT,\n"
+        "`fact`	INTEGER NOT NULL,\n"
+        "PRIMARY KEY(`dataset`,`dimension`,`hierarchy`,`sort_order`,`item`,`item_index`,`fact`)\n"
+        ") WITHOUT ROWID;\n",
+        #
+        "CREATE TABLE `dataset_dimension_alternative` (\n"
+        "`dataset`	TEXT NOT NULL,\n"
+        "`dimension`	TEXT NOT NULL,\n"
+        "`alternative_index`	INTEGER NOT NULL,\n"
+        "`alternative_item`	TEXT NOT NULL,\n"
+        "`fact`	INTEGER NOT NULL,\n"
+        "PRIMARY KEY(`dataset`,`dimension`,`alternative_index`,`alternative_item`,`fact`)\n"
+        ") WITHOUT ROWID;\n",
         ]
 
 
@@ -1206,13 +1251,30 @@ def lookup(lang = None):
 # Looks up key in the dictionary.
 # If the value retrieved from the dictionary for the key is "" then the SkipRow
 # exception is thrown to indicate that no database INSERT should be generated
-# for this row..
+# for this row.
 def lookup_require_not_empty(key, dictionary):
     v = dictionary[key]
     if (v == ""):
         raise SkipRow
     else:
         return v
+
+# Looks up key in the dictionary.
+# If the key does not exist in the dictionary then the SkipRow exception is
+# thrown to indicate that no database INSERT should be generated for this row.
+# This is similar to lookup_require_not_empty() but lookup_require_not_empty()
+# requires the key to exist but be non-"", whereas this skips the row if the
+# key is not in the dictionary at all.
+def lookup_or_skip(key, dictionary):
+    if (key in dictionary):
+        return dictionary[key]
+    else:
+        raise SkipRow
+
+# Looks up key in the dictionary.
+# If the key is not present, returns the default value instead.
+def lookup_or_default(default):
+    return lambda key, dictionary: dictionary.get(key, default)
 
 # Returns the first argument.
 def identity(x, _):
@@ -1992,6 +2054,12 @@ def load_odata_dataset_dimension_items():
 
 # Loads the dataset_measure, dataset_dimension and
 # dataset_dimension_alternative tables for the specified dataset.
+# Depends on dataset_collection, odata_dataset_dimension_item and
+# odata_dataset_dimension_item_info, being
+# loaded.
+# Depends on the odata_dataset_dimension's dimension_index column referring to
+# the same dimension in every language which is the same as
+# load_data_dataset_dimesions()'s assumption.
 # Succeeds or Throws.
 def load_dataset(dataset, href):
 
@@ -2002,9 +2070,112 @@ def load_dataset(dataset, href):
 
     def load_from(local_file, lang, insert, check):
 
+        # Save the existing row factory because we want to use it for everything
+        # except the following queries.
+        row_factory   = c.row_factory
+        c.row_factory = sqlite3.Row
+
+        # Load the dimension information for this dataset so that we can check that
+        # the reference data supplied matches odata_dataset_dimension_item*.
+        dimensions = c.execute("SELECT `odd`.`dataset` AS `dataset`, `odd`.`dimension` AS `dimension`, `odd`.`dimension_index` AS `dimension_index`, `oddi`.`dimension_localised` AS `dimension_localised` FROM `odata_dataset_dimension` AS `odd` LEFT JOIN `odata_dataset_dimension_info` AS `oddi` ON `odd`.`dataset` = `oddi`.`dataset` AND `odd`.`dimension_index` = `oddi`.`dimension_index` WHERE `odd`.`dataset` = ? AND `oddi`.`lang` = ?;", (dataset, lang))
+
+        dimensions = dimensions.fetchall()
+
+        c.row_factory = row_factory
+
         procs = []
 
-        # Don't load anything yet: just download (and cache) all the files.
+        # Load the measure itself.
+        dataset_measure_map = [
+                ("dataset", identity, dataset),
+                ("fact",    lookup(), "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
+                ("value",   lookup(), "Data"),
+                ]
+
+        procs += make_procs("dataset_measure", dataset_measure_map, insert, check)
+
+        # Load each dimension.
+        for d in dimensions:
+
+            dimension = d["dimension"]
+
+            # We need to match the reference data against the
+            # odata_dataset_dimension_item_info table to find an item_index
+            # because some datasets (for example hous0403/Area) do not have the
+            # correct values in odata_dataset_dimension_item.item so we cannot
+            # always validate it directly. If the existing metadata was clean
+            # then we could do away with item_index altogether.
+            def find_item_index(d, dictionary):
+
+                dimension   = d["dimension"]
+                item        = dictionary["%s_Code"        % (dimension)]
+                description = dictionary["%s_ItemName_%s" % (dimension, {"en-gb": "ENG", "cy-gb": "WEL"}[lang])]
+
+                # First look up the code as it's authoritative and almost all
+                # datasets have the proper data in
+                # odata_dataset_dimension_item.item.
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                    ("item_index",),
+                    "WHERE `dataset` = ? AND `dimension` = ? AND `item` = ?"),
+                    (dataset, dimension, item))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        raise AssertionError("find_item_index(): Multiple results found for item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item, dimension, dataset))
+                    return item_index
+
+                # Some datasets (for example hous0403/Area) do not have the
+                # correct values in odata_dataset_dimension_item.item so try to
+                # match based on the description instead.
+                q = c.execute(SELECT("odata_dataset_dimension_item_info",
+                    ("item_index",),
+                    "WHERE `dataset` = ? AND `lang` = ? AND `dimension_localised` = ? AND `description` = ?"),
+                    (dataset, lang, d["dimension_localised"], description))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        raise AssertionError("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
+                    return item_index
+
+
+                raise AssertionError("find_item_index(): Could not resolve item '%s' with description '%s' in dimension '%s' localised as '%s' in language '%s' of dataset '%s'!\n" % (item, description, dimension, d["dimension_localised"], lang, dataset))
+
+
+            dataset_dimension_map = [
+                    ("dataset",    identity,              dataset),
+                    ("dimension",  identity,              dimension),
+                    ("hierarchy",  lookup_or_default(""), "%s_Hierarchy" % dimension),
+                    ("sort_order", lookup(),              "%s_SortOrder" % dimension),
+                    ("item",       lookup(),              "%s_Code"      % dimension),
+                    ("item_index", find_item_index,       d),
+                    ("fact",       lookup(),              "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
+                    ]
+
+            procs += make_procs("dataset_dimension", dataset_dimension_map, insert, check, check_nulls = False)
+
+            # Each dimension can have up to three "alternative code":
+            # "AltCode1", "AltCode2" and "AltCode3".
+            # We need to INSERT (or CHECK_ROW) a row into
+            # dataset_dimension_alternative for each alternative that is
+            # specified (non-"") for each dimension.
+            for n in (1, 2, 3):
+
+                dataset_dimension_alternative_map = [
+                        ("dataset",           identity,       dataset),
+                        ("dimension",         identity,       dimension),
+                        ("alternative_index", identity,       n),
+                        ("alternative_item",  lookup_or_skip, "%s_AltCode%d" % (dimension, n)),
+                        ("fact",              lookup(),       "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
+                        ]
+
+                procs += make_procs("dataset_dimension_alternative", dataset_dimension_alternative_map, insert, check, check_nulls = False)
+
 
         load_json_pages(local_file, c, procs)
 
@@ -2013,8 +2184,8 @@ def load_dataset(dataset, href):
     # codes and check the language specific dimension metadata. For every other
     # language, check the language agnostic data and dimension codes and check
     # the language specific dimension metadata.
-    load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", [], [])
-    load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], [])
+    load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", ["dataset_measure", "dataset_dimension", "dataset_dimension_alternative"], [])
+    load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], ["dataset_measure", "dataset_dimension", "dataset_dimension_alternative"])
 
     c.execute("RELEASE load_dataset")
 
