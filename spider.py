@@ -954,12 +954,20 @@ def INSERT(table, the_map):
 # If we were using a database over a socket rather than in core then it would
 # be nice to work out a way to do this with range queries rather than point
 # queries.
-def CHECK_ROW(table, the_map):
+# check_nulls is a performance hack as the (%s = ? OR %s IS ?) clause is
+# expensive on large tables because it cannot take advantage of indexes with
+# compound keys. But in the case of dataset_dimension which has all the columns
+# as PRIMARY KEYS, we know that there cannot be any NULLs so can set
+# check_nulls to False.
+def CHECK_ROW(table, the_map, check_nulls = True):
 
     # Build the query string.
     table            = sqlite3_quote_identifier(table)
     columns          = [sqlite3_quote_identifier(x[0]) for x in the_map]
-    where_conditions = ["(%s = ? OR %s IS ?)" % (x, x) for x in columns]  # (= OR IS) to handle NULLs.
+    if (check_nulls):
+        where_conditions = ["(%s = ? OR %s IS ?)" % (x, x) for x in columns]  # (= OR IS) to handle NULLs.
+    else:
+        where_conditions = ["%s = ?" % (x) for x in columns]
     where_conditions = " AND ".join(where_conditions)
     query            = "SELECT COUNT(*) FROM %s WHERE %s;" % (table, where_conditions)
 
@@ -983,7 +991,8 @@ def CHECK_ROW(table, the_map):
             try:
                 b = bind(x, dictionary)
                 bindings.append(b)  # =  condition
-                bindings.append(b)  # IS condition
+                if (check_nulls):
+                    bindings.append(b)  # IS condition
             except SkipRow:
                 failed +=1
 
@@ -1009,7 +1018,7 @@ def IGNORE_ROW(table, the_map):
 
 # A helper to drive INSERT and CHECK_ROW to make a list of database
 # query-running procedures.
-def make_procs(table, the_map, insert, check):
+def make_procs(table, the_map, insert, check, check_nulls = True):
 
     procs = []
 
@@ -1017,7 +1026,7 @@ def make_procs(table, the_map, insert, check):
         procs.append(INSERT(table, the_map))
 
     if (table in check):
-        procs.append(CHECK_ROW(table, the_map))
+        procs.append(CHECK_ROW(table, the_map, check_nulls))
 
     return procs
 
