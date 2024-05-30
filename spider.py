@@ -57,6 +57,10 @@
 #    >>> spider.load_dataset("agri0100", "agri0100")
 #    -----
 #
+#    The datasets take up a considerable amount of space in ugc/. As of
+#    2025/05/03 it's about 128GiB. However, once loaded, the SQLite file is
+#    only 20GiB.
+#
 #
 # Andy Bennett <andyjpb@register-dynamics.co.uk>, 2024/02/26 12:26.
 #
@@ -2470,6 +2474,9 @@ def load_metadata():
         c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index IN ?""", dup_index)
 
 
+# Loads each dataset in turn.
+# As of 2024/05/01 these take about XXX of space in ugc/ and XXX of space in
+# the sqlite file.
 # start_from can optionally specify a position in dataset_collection to start
 # from. This is useful when debugging load_dataset().
 # Depends on dataset_collection being loaded.
