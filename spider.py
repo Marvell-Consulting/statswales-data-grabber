@@ -1060,6 +1060,7 @@ def CHECK_ROW(table, the_map, check_nulls = True):
                 failed +=1
 
         if (failed == 0):
+            #print("%s\n\n%s\n\n" % (query, bindings))
             r = cursor.execute(query, bindings)
             r = r.fetchone()
             if (r[0] != 1):
@@ -1127,6 +1128,7 @@ def check_uri_cache(uri, timestamp=None):
 # path - The path as a list or tuple of path segments to append to the base.
 #
 # Returns the location of the local data in the cache.
+# TODO: check the response code. Also, reload cached items that aren't 200.
 def fetch_uri(base, path=None):
 
     now = time.time()
