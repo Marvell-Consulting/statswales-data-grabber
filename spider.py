@@ -2341,21 +2341,8 @@ def load_datasets(start_from = None):
     warn("load_datasets()\n")
     
     # List of datasets not to load due to issues with duplication in the metadata
-    not_load = ['agri0218',
-                'care0026',
-                'hlth0223',
-                'hlth0504',
-                'hlth1250',
-                'hlth1251',
-                'hlth1309',
-                'hlth1310',
-                'hous2008',
-                'schs0310',
-                'schs0331',
-                'schs0332',
-                'schw0021',
-                'schw0023',
-                'schw0026']
+    not_load = ['hlth1309',
+                'hlth1310']
 
     c = db.cursor()
 
