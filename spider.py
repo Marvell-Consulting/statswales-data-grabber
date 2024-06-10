@@ -2109,7 +2109,12 @@ def load_dataset(dataset, href):
 
                 dimension   = d["dimension"]
                 item        = dictionary["%s_Code"        % (dimension)]
-                description = dictionary["%s_ItemName_%s" % (dimension, {"en-gb": "ENG", "cy-gb": "WEL"}[lang])]
+                alt_item    = dictionary.get("%s_AltCode1" % (dimension))
+                description = dictionary.get("%s_ItemName_%s" % (dimension, {"en-gb": "ENG", "cy-gb": "WEL"}[lang]))
+
+                # print(dimension, item, alt_item, description)
+
+
 
                 # First look up the code as it's authoritative and almost all
                 # datasets have the proper data in
@@ -2124,8 +2129,60 @@ def load_dataset(dataset, href):
                     item_index = r[0]
                     # Ensure that only one item was found.
                     if (q.fetchone()):
-                        raise AssertionError("find_item_index(): Multiple results found for item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item, dimension, dataset))
-                    return item_index
+                        print("find_item_index(): Multiple results found for item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item, dimension, dataset))
+                    else:
+                        return item_index
+
+                # Some datasets (for example hous0403/Area) do not have the
+                # correct values in odata_dataset_dimension_item.item so try to
+                # match based on the alternate code instead.
+                q = c.execute(SELECT("odata_dataset_dimension_item_alternative",
+                    ("item_index",),
+                    "WHERE `dataset` = ? AND `alternative_item` = ?"),
+                    (dataset, alt_item))
+
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        return item_index
+
+                # Try removing decimals with trailing zeroes from item (converting float to int)
+                if (isinstance(item, float)):
+                    item_int = int(item)
+
+                    q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND CAST(`item` AS int) = ?"),
+                                  (dataset, dimension, item_int))
+
+                    r = q.fetchone()
+                    if (r):
+                        item_index = r[0]
+                        # Ensure that only one item was found.
+                        if (q.fetchone()):
+                            print("find_item_index(): Multiple results found for item_int '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item_int, dimension, dataset))
+                        else:
+                            return item_index
+
+                # We can also try the same on the metadata side
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND CAST(`item` AS int) = ?"),
+                                  (dataset, dimension, item))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        return item_index
 
                 # Some datasets (for example hous0403/Area) do not have the
                 # correct values in odata_dataset_dimension_item.item so try to
@@ -2140,8 +2197,29 @@ def load_dataset(dataset, href):
                     item_index = r[0]
                     # Ensure that only one item was found.
                     if (q.fetchone()):
-                        raise AssertionError("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
-                    return item_index
+                        print("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
+                    else:
+                        return item_index
+
+                # Sometimes, mainly in the Welsh version, there are non-ASCII characters that
+                # don't show up correctly in the metadata, instead being ?, we need to fix this later.
+                if not (description.isascii()):
+                    #print('non-ASCII')
+                    alt_desc = re.sub(r'[^\x00-\x7F]+','?', description)
+                    q = c.execute(SELECT("odata_dataset_dimension_item_info",
+                        ("item_index",),
+                        "WHERE `dataset` = ? AND `lang` = ? AND `dimension_localised` = ? AND `description` = ?"),
+                        (dataset, lang, d["dimension_localised"], alt_desc))
+
+                    r = q.fetchone()
+                    if (r):
+                        item_index = r[0]
+                        # Ensure that only one item was found.
+                        if (q.fetchone()):
+                            print("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
+                        else:
+                            return item_index
+
 
 
                 raise AssertionError("find_item_index(): Could not resolve item '%s' with description '%s' in dimension '%s' localised as '%s' in language '%s' of dataset '%s'!\n" % (item, description, dimension, d["dimension_localised"], lang, dataset))
@@ -2151,7 +2229,7 @@ def load_dataset(dataset, href):
                     ("dataset",    identity,              dataset),
                     ("dimension",  identity,              dimension),
                     ("hierarchy",  lookup_or_default(""), "%s_Hierarchy" % dimension),
-                    ("sort_order", lookup(),              "%s_SortOrder" % dimension),
+                    ("sort_order", lookup_or_default(""), "%s_SortOrder" % dimension),
                     ("item",       lookup(),              "%s_Code"      % dimension),
                     ("item_index", find_item_index,       d),
                     ("fact",       lookup(),              "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
@@ -2203,6 +2281,41 @@ def load_metadata():
     load_odata_dataset_dimensions()
     load_odata_dataset_dimension_items()
 
+    # We need to edit some metadata entries in the database as they are duplicated
+    dup = ['agri0218',
+                'care0026',
+                'hlth0223',
+                'hlth0504',
+                'hlth1250',
+                'hlth1251',
+                'hous2008',
+                'schs0310',
+                'schs0331',
+                'schs0332',
+                'schw0021',
+                'schw0023',
+                'schw0026']
+
+    for d in dup:
+        c = db.cursor()
+
+        q = c.execute("""SELECT A.item_index from odata_dataset_dimension_item A
+                          INNER JOIN
+                          (select dataset,
+                                   dimension,
+                                   item,
+                                   item_index,
+                                   RANK() OVER(PARTITION BY dataset, dimension, item ORDER BY item_index ASC) rank_no
+                            FROM odata_dataset_dimension_item
+                            WHERE dataset=?) B on A.item_index = B.item_index
+                            WHERE B.rank_no > 1;""", d)
+
+        dup_index = q.fetchall()
+
+        c.execute("""DELETE FROM odata_dataset_dimension_item WHERE item_index IN ?""", dup_index)
+        c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index IN ?""", dup_index)
+
+
 
 # start_from can optionally specify a position in dataset_collection to start
 # from. This is useful when debugging load_dataset().
@@ -2210,6 +2323,23 @@ def load_metadata():
 def load_datasets(start_from = None):
 
     warn("load_datasets()\n")
+
+    # List of datasets not to load due to issues with duplication in the metadata
+    not_load = ['agri0218',
+                'care0026',
+                'hlth0223',
+                'hlth0504',
+                'hlth1250',
+                'hlth1251',
+                'hlth1309',
+                'hlth1310',
+                'hous2008',
+                'schs0310',
+                'schs0331',
+                'schs0332',
+                'schw0021',
+                'schw0023',
+                'schw0026']
 
     c = db.cursor()
 
@@ -2220,7 +2350,12 @@ def load_datasets(start_from = None):
 
     r = q.fetchone()
     while (r):
-        load_dataset(r[0], r[1])
+        if (r[0] not in not_load):
+            time_start = time.time
+            print(r[0], time_start)
+            load_dataset(r[0], r[1])
+            time_end = time.time
+            print(r[0], time_end)
         r = q.fetchone()
 
     # Generate warnings for the cubes that don't have hrefs.
