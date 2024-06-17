@@ -7,8 +7,8 @@
 # Spider the Open Data URL hierarchy of StatsWales2 so that we can build some
 # inspectors and other tools to explore what's there.
 #
-# Finds metadata about the different StatsWales2 datacubes and loads it into an
-# sqlite3 database.
+# Finds data and metadata about the different StatsWales2 datacubes and loads
+# it into an sqlite3 database.
 #
 #
 #    To load the database initially:
@@ -17,7 +17,7 @@
 #    $ python3
 #    >>> import spider
 #    >>> spider.initialise()
-#    >>> spider.load_all()
+#    >>> spider.load_metadata()
 #    -----
 #
 #    To force a reload from cached downloads:
@@ -28,7 +28,7 @@
 #    >>> spider.initialise()
 #    >>> spider.purge_database()
 #    >>> spider.initialise()
-#    >>> spider.load_all()
+#    >>> spider.load_metadata()
 #    -----
 #
 #    To reload entirely from scratch:
@@ -41,6 +41,20 @@
 #    >>> import spider
 #    >>> spider.initialise()
 #    >>> spider.load_all()
+#    >>> spider.load_metadata()
+#    -----
+#
+#    To load all of the cube data (measure and dimension data from each
+#    dataset), first initialise the database using one of the methods above then:
+#
+#    -----
+#    >>> spider.load_datasets()
+#    -----
+#
+#    or, to load just a specific dataset:
+#
+#    -----
+#    >>> spider.load_dataset("agri0100", "agri0100")
 #    -----
 #
 #
@@ -75,7 +89,11 @@ import json
 ################################################################################
 ### Program State.
 
-db = None
+db        = None
+http      = None
+
+# Longest interval to wait between HTTP Requests that time out.
+retry_max = 512
 
 
 
@@ -950,12 +968,20 @@ def INSERT(table, the_map):
 # If we were using a database over a socket rather than in core then it would
 # be nice to work out a way to do this with range queries rather than point
 # queries.
-def CHECK_ROW(table, the_map):
+# check_nulls is a performance hack as the (%s = ? OR %s IS ?) clause is
+# expensive on large tables because it cannot take advantage of indexes with
+# compound keys. But in the case of dataset_dimension which has all the columns
+# as PRIMARY KEYS, we know that there cannot be any NULLs so can set
+# check_nulls to False.
+def CHECK_ROW(table, the_map, check_nulls = True):
 
     # Build the query string.
     table            = sqlite3_quote_identifier(table)
     columns          = [sqlite3_quote_identifier(x[0]) for x in the_map]
-    where_conditions = ["(%s = ? OR %s IS ?)" % (x, x) for x in columns]  # (= OR IS) to handle NULLs.
+    if (check_nulls):
+        where_conditions = ["(%s = ? OR %s IS ?)" % (x, x) for x in columns]  # (= OR IS) to handle NULLs.
+    else:
+        where_conditions = ["%s = ?" % (x) for x in columns]
     where_conditions = " AND ".join(where_conditions)
     query            = "SELECT COUNT(*) FROM %s WHERE %s;" % (table, where_conditions)
 
@@ -979,7 +1005,8 @@ def CHECK_ROW(table, the_map):
             try:
                 b = bind(x, dictionary)
                 bindings.append(b)  # =  condition
-                bindings.append(b)  # IS condition
+                if (check_nulls):
+                    bindings.append(b)  # IS condition
             except SkipRow:
                 failed +=1
 
@@ -1005,7 +1032,7 @@ def IGNORE_ROW(table, the_map):
 
 # A helper to drive INSERT and CHECK_ROW to make a list of database
 # query-running procedures.
-def make_procs(table, the_map, insert, check):
+def make_procs(table, the_map, insert, check, check_nulls = True):
 
     procs = []
 
@@ -1013,7 +1040,7 @@ def make_procs(table, the_map, insert, check):
         procs.append(INSERT(table, the_map))
 
     if (table in check):
-        procs.append(CHECK_ROW(table, the_map))
+        procs.append(CHECK_ROW(table, the_map, check_nulls))
 
     return procs
 
@@ -1079,7 +1106,26 @@ def fetch_uri(base, path=None):
         return local
 
     # Fetch the URI from the Internet.
-    response = requests.get(uri)
+    # Start with quite a large timeout because some of the metadata Responses
+    # are large, take the server a long time to generate and it seems that it
+    # doesn't start sending anything until it's generated the whole response.
+    retry_interval = 64
+    while True:
+        try:
+            # Set timeouts for connect() and read() to retry_interval.
+            response = http.get(uri, timeout = (retry_interval, retry_interval))
+            break
+        except requests.exceptions.ReadTimeout:
+            warn(" [TIMEOUT]\n")
+            warn("  HTTP Request timed out! Retrying in %d seconds...\n" % retry_interval)
+        except requests.exceptions.ConnectTimeout:
+            warn(" [TIMEOUT]\n")
+            warn("  TCP connect  timed out! Retrying in %d seconds...\n" % retry_interval)
+        time.sleep(retry_interval)
+        retry_interval *= 2
+        if (retry_interval > retry_max):
+            retry_interval = retry_max
+        warn("fetch_uri: %s" % pretty_uri)
 
     # Cache the response body.
     filename = "temp-%d" % os.getpid()
@@ -1153,7 +1199,6 @@ def parse_content_type(header):
 
 
 
-
 ################################################################################
 ### Load things from StatsWales2.
 
@@ -1224,30 +1269,34 @@ def make_autoincrement(n):
 # more.
 def load_json_pages(local_file, cursor, insert_procs):
 
-    filename = from_ugc(local_file["filename"])
+    more = True
 
-    content_type = parse_content_type(local_file["content-type"])
-    mime_type    = content_type[0]
-    options      = content_type[1]
+    while (more):
 
-    if (mime_type != "application/json"):
-        raise AssertionError("load_odata_catalogue: Expected mime-type of application/json but %s has %s!" % (filename, content_type))
+        filename = from_ugc(local_file["filename"])
 
-    tree = {}
-    with open(filename, 'rb') as fd:
-        tree = json.load(fd)
+        content_type = parse_content_type(local_file["content-type"])
+        mime_type    = content_type[0]
+        options      = content_type[1]
 
-    value = tree["value"]
-    more  = tree.get("odata.nextLink", False)
+        if (mime_type != "application/json"):
+            raise AssertionError("load_odata_catalogue: Expected mime-type of application/json but %s has %s!" % (filename, content_type))
 
-    # Insert the correct data from each value into each table.
-    for p in insert_procs:
-        for v in value:
-            p(cursor, v)
+        tree = {}
+        with open(filename, 'rb') as fd:
+            tree = json.load(fd)
 
-    # Carry on with the next page.
-    if (more):
-        load_json_pages(fetch_uri(more), cursor, insert_procs)  # Oops! No TCO in Python.
+        value = tree["value"]
+        more  = tree.get("odata.nextLink", False)
+
+        # Insert the correct data from each value into each table.
+        for p in insert_procs:
+            for v in value:
+                p(cursor, v)
+
+        # Carry on with the next page.
+        if (more):
+            local_file = fetch_uri(more)
 
 
 # Loads the dataset_collection table.
@@ -1922,7 +1971,7 @@ def load_odata_dataset_dimension_items():
 
             odata_dataset_dimension_item_alternative_map = [
                     # The autoincrement counter will increment for every
-                    # candidate row even if lookup_require_no_empty decides to
+                    # candidate row even if lookup_require_not_empty decides to
                     # skip the row because INSERT and CHECK_ROW guarantee it to
                     # be so.
                     ("dataset",             lookup(),                  "Dataset"),
@@ -1956,7 +2005,39 @@ def load_odata_dataset_dimension_items():
     c.execute("RELEASE load_odata_dataset_dimension_items")
 
 
-def load_all():
+# Loads the dataset_measure, dataset_dimension and
+# dataset_dimension_alternative tables for the specified dataset.
+# Succeeds or Throws.
+def load_dataset(dataset, href):
+
+    warn("load_dataset(%s)\n" % dataset)
+
+    c = db.cursor()
+    c.execute("SAVEPOINT load_dataset");
+
+    def load_from(local_file, lang, insert, check):
+
+        procs = []
+
+        # Don't load anything yet: just download (and cache) all the files.
+
+        load_json_pages(local_file, c, procs)
+
+
+    # For one language INSERT the language agnostic measure data and dimension
+    # codes and check the language specific dimension metadata. For every other
+    # language, check the language agnostic data and dimension codes and check
+    # the language specific dimension metadata.
+    load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", [], [])
+    load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], [])
+
+    c.execute("RELEASE load_dataset")
+
+
+def load_metadata():
+
+    warn("load_metadata()\n");
+
     load_dataset_collections()
     load_dataset_properties()
     load_odata_catalogue()
@@ -1967,6 +2048,41 @@ def load_all():
     load_odata_dataset_dimension_items()
 
 
+# start_from can optionally specify a position in dataset_collection to start
+# from. This is useful when debugging load_dataset().
+# Depends on dataset_collection being loaded.
+def load_datasets(start_from = None):
+
+    warn("load_datasets()\n")
+
+    c = db.cursor()
+
+    # Download each cube that we expect OData for.
+    q = c.execute(SELECT("dataset_collection", ("dataset", "href",),
+        "WHERE `href` IS NOT NULL AND ((NULL IS ?) OR (`dataset` >= ?)) ORDER BY `dataset`;"),
+        (start_from, start_from))
+
+    r = q.fetchone()
+    while (r):
+        load_dataset(r[0], r[1])
+        r = q.fetchone()
+
+    # Generate warnings for the cubes that don't have hrefs.
+    q = c.execute(SELECT("dataset_collection", ("dataset",),
+        "WHERE `href` IS NULL AND ((NULL IS ?) OR (`dataset` >= ?)) ORDER BY `dataset`;"),
+        (start_from, start_from))
+
+    r = q.fetchone()
+    while (r):
+        warn("load_datasets: Ignoring %s\n" % r[0])
+        r = q.fetchone()
+
+
+def load_all():
+    load_metadata()
+    load_datasets()
+
+
 
 ################################################################################
 ### Main Program.
@@ -1974,6 +2090,7 @@ def load_all():
 def initialise():
 
     global db
+    global http
 
     # Initialise the database.
 
@@ -2005,6 +2122,10 @@ def initialise():
 
     # Temporary files
     pathlib.Path("tmp/").mkdir(exist_ok=True)
+
+
+    # Initialise the HTTP Session.
+    http = requests.Session()
 
 
 def main(argv):
