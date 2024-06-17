@@ -420,11 +420,41 @@ def hello() -> str:
 
     r = r.fetchall()
 
+    dimensions_histogram = c.execute("""
+        SELECT
+        dimensions_per_dataset,
+        count(dimensions_per_dataset) AS n_datasets
+        FROM
+        (
+        SELECT
+        COUNT(distinct dimension) AS dimensions_per_dataset,
+        dataset
+        FROM dataset_property_dimension
+        GROUP BY dataset
+        ORDER BY dimensions_per_dataset
+        )
+        GROUP BY dimensions_per_dataset
+        ORDER BY dimensions_per_dataset
+    """)
+
+    dimensions_histogram = dimensions_histogram.fetchall()
+
 
     return render_request(
             Title = "List of datasets",
             Main  = MAIN(
-                H1("List of datasets"),
+                H1("Datasets"),
+                H2("Overall Statistics"),
+                LARGE_TABLE(
+                    TR(
+                        TH("Number of Datasets"),
+                        *[TD(f'{d[1]:,}') for d in dimensions_histogram],
+                    ),
+                    TR(
+                        TH("Dimensions Per Dataset"),
+                        *[TD(f'{d[0]:,}') for d in dimensions_histogram],
+                        )),
+                H2("List of datasets"),
                 P("Pick a dataset to visualise."),
                 UL(
                     *[LI(x[0], " (", f'{x[1]:,}', " facts)",
