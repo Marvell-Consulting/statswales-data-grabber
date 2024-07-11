@@ -9,6 +9,12 @@
 # $ python3 visualise.py
 #
 #
+# Installing Flask
+# https://flask.palletsprojects.com/en/3.0.x/installation/
+#
+# $ pip3 install Flask
+#
+#
 # Andy Bennett <andyjpb@register-dynamics.co.uk>, 2024/05/30 14:23.
 #
 ################################################################################
