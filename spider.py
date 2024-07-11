@@ -2617,6 +2617,7 @@ def extract_data(dataset):
             writer = csv.writer(file)
             colnames = ['item',
                         'hierarchy',
+                        'sort_order',
                         'description_cy',
                         'description_en',
                         'notes_cy',
