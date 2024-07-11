@@ -2650,7 +2650,7 @@ def extract_data(dataset):
     dataquery.append(' FROM m JOIN d ON m.fact = d.fact')
     
     dataquery = ''.join(dataquery)
-    print(dataquery)
+    #print(dataquery)
     
     q = c.execute(dataquery)
     
