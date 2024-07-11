@@ -452,7 +452,7 @@ def hello() -> str:
                     ),
                     TR(
                         TH("Dimensions Per Dataset"),
-                        *[TD(f'{d[0]:,}') for d in dimensions_histogram],
+                        *[TD(A("/by-dimension-count/%d" % d[0], f'{d[0]:,}')) for d in dimensions_histogram],
                         )),
                 H2("List of datasets"),
                 P("Pick a dataset to visualise."),
@@ -468,6 +468,37 @@ def hello() -> str:
 def stylesheet() -> str:
     return flask.send_from_directory(".", "visualise.css")
 
+# Display lists of datasets by the count of the number of dimensions they have.
+@app.route("/by-dimension-count/<n>")
+def by_dimension_count(n) -> str:
+
+    n = int(n)
+
+    c = flask.g.db.cursor()
+
+    r = c.execute("""
+        SELECT
+        COUNT(distinct dimension) AS dimensions_per_dataset,
+        dataset
+        FROM dataset_property_dimension
+        GROUP BY dataset
+        HAVING dimensions_per_dataset = ?
+        ORDER BY dataset;
+        """, (n,))
+
+    r = r.fetchall()
+
+    return render_request(
+            Title = "Datasets with %d dimensions" % n,
+            Main  = MAIN(
+                H1("Datasets with %d dimensions" % n),
+                P("Pick a dataset to visualise."),
+                UL(
+                    *[LI(x[1],
+                        UL(LI(A("/render/%s" % x[1], "Table Visualiser")),
+                            LI(A("/fact-table/%s" % x[1], "Fact Table")),
+                            )) for x in r],
+                        )))
 
 # Display cube metadata for table specification.
 @app.route("/render/<dataset>")
