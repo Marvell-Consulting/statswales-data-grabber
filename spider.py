@@ -74,6 +74,7 @@ import requests
 import time
 import re
 import collections
+import csv
 
 # Parsing Libraries
 # We assume that StatsWales2 is trustworthy so do not currently defend against
@@ -748,6 +749,51 @@ db_schema = [
         "	a.`lang` = 'cy-gb' AND\n"
         "	b.`dataset` IS NULL\n"
         ";\n",
+        #
+        # Measure and Dimension values
+        #   from
+        #     http://open.statswales.gov.wales/en-gb/dataset/<dataset>    (English)
+        #     and
+        #     http://agored.statscymru.llyw.cymru/cy-gb/dataset/<dataset> (Welsh)
+        #
+        # This table holds the measure value for a fact.
+        "CREATE TABLE `dataset_measure` (\n"
+        "`dataset`	TEXT NOT NULL,\n"
+        "`fact`	INTEGER NOT NULL,\n"
+        "`value`	NUMERIC,\n"
+        "PRIMARY KEY(`dataset`,`fact`)\n"
+        ") WITHOUT ROWID;\n",
+        #
+        # This table holds each dimension of a fact. It has to include
+        # hierarchy and sort_order because these do not always match the values
+        # in odata_dataset_dimension_item so we take the opportunity to use
+        # them to group and order the data by making them part of the PRIMARY
+        # KEY. We also include item_index so that we can find the description
+        # of the item in English and Welsh. Because we use WITHOUT ROWID this
+        # probably doesn't make the table much larger than it absolutely needs
+        # to be. Of course, this might (depending, for example, on whether this
+        # layout is fortuitously performant) be refactored (i.e. simplified to
+        # just dataset, dimension, item and fact) if we are able to clean some
+        # of the SW2 data.
+        "CREATE TABLE `dataset_dimension` (\n"
+        "`dataset`	TEXT NOT NULL,\n"
+        "`dimension`	TEXT NOT NULL,\n"
+        "`hierarchy`    TEXT NOT NULL,\n"
+        "`sort_order`   TEXT NOT NULL,\n"
+        "`item`	TEXT,\n"
+        "`item_index`	TEXT,\n"
+        "`fact`	INTEGER NOT NULL,\n"
+        "PRIMARY KEY(`dataset`,`dimension`,`hierarchy`,`sort_order`,`item`,`item_index`,`fact`)\n"
+        ") WITHOUT ROWID;\n",
+        #
+        "CREATE TABLE `dataset_dimension_alternative` (\n"
+        "`dataset`	TEXT NOT NULL,\n"
+        "`dimension`	TEXT NOT NULL,\n"
+        "`alternative_index`	INTEGER NOT NULL,\n"
+        "`alternative_item`	TEXT NOT NULL,\n"
+        "`fact`	INTEGER NOT NULL,\n"
+        "PRIMARY KEY(`dataset`,`dimension`,`alternative_index`,`alternative_item`,`fact`)\n"
+        ") WITHOUT ROWID;\n",
         ]
 
 
@@ -1199,6 +1245,7 @@ def parse_content_type(header):
 
 
 
+
 ################################################################################
 ### Load things from StatsWales2.
 
@@ -1223,13 +1270,30 @@ def lookup(lang = None):
 # Looks up key in the dictionary.
 # If the value retrieved from the dictionary for the key is "" then the SkipRow
 # exception is thrown to indicate that no database INSERT should be generated
-# for this row..
+# for this row.
 def lookup_require_not_empty(key, dictionary):
     v = dictionary[key]
     if (v == ""):
         raise SkipRow
     else:
         return v
+
+# Looks up key in the dictionary.
+# If the key does not exist in the dictionary then the SkipRow exception is
+# thrown to indicate that no database INSERT should be generated for this row.
+# This is similar to lookup_require_not_empty() but lookup_require_not_empty()
+# requires the key to exist but be non-"", whereas this skips the row if the
+# key is not in the dictionary at all.
+def lookup_or_skip(key, dictionary):
+    if (key in dictionary):
+        return dictionary[key]
+    else:
+        raise SkipRow
+
+# Looks up key in the dictionary.
+# If the key is not present, returns the default value instead.
+def lookup_or_default(default):
+    return lambda key, dictionary: dictionary.get(key, default)
 
 # Returns the first argument.
 def identity(x, _):
@@ -1248,6 +1312,9 @@ def dimension_name_to_key(lang):
         v = dimension_name_to_key_re.sub("", v)
         return v
     return closure
+
+# def dimension_name_to_index():
+    
 
 # Make a procedure that implements an automatically incrementing column value
 # that starts at n.
@@ -1889,27 +1956,50 @@ def load_odata_dataset_dimensions():
 
     c.execute("RELEASE load_odata_dataset_dimensions")
 
+
+        
+    
+    
 # Loads the odata_dataset_dimension_item, odata_dataset_dimension_item_info and
 # odata_dataset_dimension_item_alternative tables.
 # Depends on dataset_collection, dataset_collection_info and
 # odata_dataset_dimension being loaded.
 # Succeeds or Throws.
 def load_odata_dataset_dimension_items():
-
+    
     warn("load_odata_dataset_dimension_items()\n")
 
     c = db.cursor()
     c.execute("SAVEPOINT load_odata_dataset_dimension_items");
-
-    def load_from(local_file, lang, insert, check):
+    
+    def dimension_name_to_index(lang):
+        def closure(keys, dictionary):
+            v = dictionary[keys[lang]]
+            q = c.execute(SELECT("odata_dataset_dimension_info",
+                    ("dimension_index",),
+                    "WHERE `lang` = ? AND `description` = ?"),
+                    (lang, v))
+            r = q.fetchone()
+            if (r):
+                v = r[0]
+                # Ensure that only one item was found.
+                if (q.fetchone()):
+                    raise AssertionError("dimension_name_to_index(): Multiple results found for dimension '%s' with lang '%s' but a maximum of one was expected!\n" % (v, lang))
+                else: 
+                    return r
+                raise AssertionError("dimension_name_to_index(): Unable to find dimension_index for dimension '%s' with lang '%s'\n" % (v, lang))
+              
+        return closure
+    
+    def load_from(local_file, lang, insert, check, index):
 
         procs = []
 
         # Declare which tables we want to load and how we want to load them.
 
         odata_dataset_dimension_item_map = []
-        autoincrement                    = make_autoincrement(0)
-        autoincrement_info               = make_autoincrement(0)
+        autoincrement                    = make_autoincrement(index)
+        autoincrement_info               = make_autoincrement(index)
 
         # Ignore the dimension field for the odata_dataset_dimension_item table in
         # every language except English because that's the only language where
@@ -1967,7 +2057,7 @@ def load_odata_dataset_dimension_items():
         # specified (non-"") for each item.
         for n in (1, 2, 3):
 
-            autoincrement_alternative = make_autoincrement(0)
+            autoincrement_alternative = make_autoincrement(index)
 
             odata_dataset_dimension_item_alternative_map = [
                     # The autoincrement counter will increment for every
@@ -1984,6 +2074,9 @@ def load_odata_dataset_dimension_items():
 
         # Load the tables from each page of OData JSON.
         load_json_pages(local_file, c, procs)
+        
+        return autoincrement(None,None)
+
 
 
     # For English (it must be English because of how the English dimension
@@ -1999,14 +2092,43 @@ def load_odata_dataset_dimension_items():
     # DimensionNameWEL fields so we have to rely on the apparent fact the
     # dimension items appear in the same order for both the English and Welsh
     # versions of the service.
-    load_from(fetch_uri(ebu, ("discover", "datasetdimensionitems")), "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [])
-    load_from(fetch_uri(wbu, ("discover", "datasetdimensionitems")), "cy-gb", ["odata_dataset_dimension_item_info"], ["odata_dataset_dimension_item", "odata_dataset_dimension_item_alternative"])
+    index_en = load_from(fetch_uri(ebu, ("discover", "datasetdimensionitems")), "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [], 0)
+    index_cy = load_from(fetch_uri(wbu, ("discover", "datasetdimensionitems")), "cy-gb", ["odata_dataset_dimension_item_info"], ["odata_dataset_dimension_item", "odata_dataset_dimension_item_alternative"], 0)
 
+    if (index_en != index_cy):
+        raise AssertionError("load_odata_dataset_dimension_items: Welsh item_index does not match english item_index")
+        
+    
+    index = index_en
+        
+    # Need to delete rows for dimension items where the item id is incorrect  
+    with open('item_id_mismatch.csv') as f:
+        reader = csv.reader(f)
+        next(reader, None)
+        for row in reader:
+            q = c.execute('''SELECT item_index FROM odata_dataset_dimension_item WHERE dataset = ? AND dimension = ? AND item = ?''',(row[0],row[1],row[3]))
+            
+            for p in q.fetchall():
+                c.execute('''DELETE FROM odata_dataset_dimension_item_info WHERE item_index = ?''',(p[0],))
+                c.execute('''DELETE FROM odata_dataset_dimension_item_alternative WHERE item_index = ?''',(p[0],))
+                c.execute('''DELETE FROM odata_dataset_dimension_item WHERE item_index = ?''',(p[0],))
+
+    
+
+    load_from({"filename": "extra.datasetdimensionitems_fixed.json", "content-type": "application/json"}, "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [], index)
+    load_from({"filename": "extra.datasetdimensionitems_fixed.json", "content-type": "application/json"}, "cy-gb", ["odata_dataset_dimension_item_info"], ["odata_dataset_dimension_item", "odata_dataset_dimension_item_alternative"], index)
+    
     c.execute("RELEASE load_odata_dataset_dimension_items")
 
 
 # Loads the dataset_measure, dataset_dimension and
 # dataset_dimension_alternative tables for the specified dataset.
+# Depends on dataset_collection, odata_dataset_dimension_item and
+# odata_dataset_dimension_item_info, being
+# loaded.
+# Depends on the odata_dataset_dimension's dimension_index column referring to
+# the same dimension in every language which is the same as
+# load_data_dataset_dimesions()'s assumption.
 # Succeeds or Throws.
 def load_dataset(dataset, href):
 
@@ -2017,9 +2139,285 @@ def load_dataset(dataset, href):
 
     def load_from(local_file, lang, insert, check):
 
+        # Save the existing row factory because we want to use it for everything
+        # except the following queries.
+        row_factory   = c.row_factory
+        c.row_factory = sqlite3.Row
+
+        # Load the dimension information for this dataset so that we can check that
+        # the reference data supplied matches odata_dataset_dimension_item*.
+        dimensions = c.execute("SELECT `odd`.`dataset` AS `dataset`, `odd`.`dimension` AS `dimension`, `odd`.`dimension_index` AS `dimension_index`, `oddi`.`dimension_localised` AS `dimension_localised` FROM `odata_dataset_dimension` AS `odd` LEFT JOIN `odata_dataset_dimension_info` AS `oddi` ON `odd`.`dataset` = `oddi`.`dataset` AND `odd`.`dimension_index` = `oddi`.`dimension_index` WHERE `odd`.`dataset` = ? AND `oddi`.`lang` = ?;", (dataset, lang))
+
+        dimensions = dimensions.fetchall()
+
+        c.row_factory = row_factory
+
         procs = []
 
-        # Don't load anything yet: just download (and cache) all the files.
+        # Load the measure itself.
+        dataset_measure_map = [
+                ("dataset", identity, dataset),
+                ("fact",    lookup(), "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
+                ("value",   lookup(), "Data"),
+                ]
+
+        procs += make_procs("dataset_measure", dataset_measure_map, insert, check)
+
+        # Load each dimension.
+        for d in dimensions:
+
+            dimension = d["dimension"]
+
+            # We need to match the reference data against the
+            # odata_dataset_dimension_item_info table to find an item_index
+            # because some datasets (for example hous0403/Area) do not have the
+            # correct values in odata_dataset_dimension_item.item so we cannot
+            # always validate it directly. If the existing metadata was clean
+            # then we could do away with item_index altogether.
+            def find_item_index(d, dictionary):
+
+                dimension   = d["dimension"]
+                item        = dictionary["%s_Code"        % (dimension)]
+                alt_item    = dictionary.get("%s_AltCode1" % (dimension))
+                description = dictionary.get("%s_ItemName_%s" % (dimension, {"en-gb": "ENG", "cy-gb": "WEL"}[lang]))
+                
+                # print(dimension, item, alt_item, description)
+                
+                
+
+                # First look up the code as it's authoritative and almost all
+                # datasets have the proper data in
+                # odata_dataset_dimension_item.item.
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                    ("item_index",),
+                    "WHERE `dataset` = ? AND `dimension` = ? AND `item` = ?"),
+                    (dataset, dimension, item))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item, dimension, dataset))
+                    else: 
+                        return item_index
+                    
+                
+                # Some datasets (for example hous0403/Area) do not have the
+                # correct values in odata_dataset_dimension_item.item so try to
+                # match based on the alternate code instead.
+                q = c.execute(SELECT("odata_dataset_dimension_item_alternative",
+                    ("item_index",),
+                    "WHERE `dataset` = ? AND `alternative_item` = ?"),
+                    (dataset, alt_item))
+                
+                              
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+                
+                # Try removing decimals with trailing zeroes from item (converting float to int)
+                if (isinstance(item, float)):
+                    item_int = int(item)
+                
+                    q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND CAST(`item` AS int) = ?"),
+                                  (dataset, dimension, item_int))
+                
+                    r = q.fetchone()
+                    if (r):
+                        item_index = r[0]
+                        # Ensure that only one item was found.
+                        if (q.fetchone()):
+                            print("find_item_index(): Multiple results found for item_int '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item_int, dimension, dataset))
+                        else:
+                            q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                          (item_index,))
+                            r = q.fetchone()
+                            mis = [dataset,dimension,item_index,r[0],item]
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            return item_index
+                    
+                # We can also try the same on the metadata side
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND CAST(`item` AS int) = ?"),
+                                  (dataset, dimension, item))
+                
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                             (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+                    
+                #Try rounding metadata item to 1 decimal place
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND ROUND(item,1) = ?"),
+                              (dataset, dimension, item))
+                
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+                    
+                #Try rounding metadata item to 2 decimal places
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND ROUND(item,2) = ?"),
+                              (dataset, dimension, item))
+                
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+                    
+                                   
+                # Some datasets (for example hous0403/Area) do not have the
+                # correct values in odata_dataset_dimension_item.item so try to
+                # match based on the description instead.
+                q = c.execute(SELECT("odata_dataset_dimension_item_info",
+                    ("item_index",),
+                    "WHERE `dataset` = ? AND `lang` = ? AND `dimension_localised` = ? AND `description` = ?"),
+                    (dataset, lang, d["dimension_localised"], description))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+                
+                # Sometimes, mainly in the Welsh version, there are non-ASCII characters that
+                # don't show up correctly in the metadata, instead being ?, we need to fix this later.
+                if not (description.isascii()):
+                    #print('non-ASCII')
+                    alt_desc = re.sub(r'[^\x00-\x7F]+','?', description)
+                    q = c.execute(SELECT("odata_dataset_dimension_item_info",
+                        ("item_index",),
+                        "WHERE `dataset` = ? AND `lang` = ? AND `dimension_localised` = ? AND `description` = ?"),
+                        (dataset, lang, d["dimension_localised"], alt_desc))
+
+                    r = q.fetchone()
+                    if (r):
+                        item_index = r[0]
+                        # Ensure that only one item was found.
+                        if (q.fetchone()):
+                            print("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
+                        else:
+                            q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                            r = q.fetchone()
+                            mis = [dataset,dimension,item_index,r[0],item]
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            return item_index
+
+                
+                
+                raise AssertionError("find_item_index(): Could not resolve item '%s' with description '%s' in dimension '%s' localised as '%s' in language '%s' of dataset '%s'!\n" % (item, description, dimension, d["dimension_localised"], lang, dataset))
+
+
+            dataset_dimension_map = [
+                    ("dataset",    identity,              dataset),
+                    ("dimension",  identity,              dimension),
+                    ("hierarchy",  lookup_or_default(""), "%s_Hierarchy" % dimension),
+                    ("sort_order", lookup_or_default(""), "%s_SortOrder" % dimension),
+                    ("item",       lookup(),              "%s_Code"      % dimension),
+                    ("item_index", find_item_index,       d),
+                    ("fact",       lookup(),              "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
+                    ]
+
+            procs += make_procs("dataset_dimension", dataset_dimension_map, insert, check, check_nulls = False)
+
+            # Each dimension can have up to three "alternative code":
+            # "AltCode1", "AltCode2" and "AltCode3".
+            # We need to INSERT (or CHECK_ROW) a row into
+            # dataset_dimension_alternative for each alternative that is
+            # specified (non-"") for each dimension.
+            for n in (1, 2, 3):
+
+                dataset_dimension_alternative_map = [
+                        ("dataset",           identity,       dataset),
+                        ("dimension",         identity,       dimension),
+                        ("alternative_index", identity,       n),
+                        ("alternative_item",  lookup_or_skip, "%s_AltCode%d" % (dimension, n)),
+                        ("fact",              lookup(),       "RowKey"),  # SQLite coerces this to an int and it seems to be unique within the datsset.
+                        ]
+
+                procs += make_procs("dataset_dimension_alternative", dataset_dimension_alternative_map, insert, check, check_nulls = False)
+
 
         load_json_pages(local_file, c, procs)
 
@@ -2028,8 +2426,8 @@ def load_dataset(dataset, href):
     # codes and check the language specific dimension metadata. For every other
     # language, check the language agnostic data and dimension codes and check
     # the language specific dimension metadata.
-    load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", [], [])
-    load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], [])
+    load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", ["dataset_measure", "dataset_dimension", "dataset_dimension_alternative"], [])
+    load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], ["dataset_measure", "dataset_dimension", "dataset_dimension_alternative"])
 
     c.execute("RELEASE load_dataset")
 
@@ -2046,6 +2444,46 @@ def load_metadata():
     load_odata_dimension_items()
     load_odata_dataset_dimensions()
     load_odata_dataset_dimension_items()
+    
+    # We need to edit some metadata entries in the database as they are duplicated
+    dup = ['agri0218',
+                'care0026',
+                'hlth0223',
+                'hlth0504',
+                'hlth1250',
+                'hlth1251',
+                'hous2008',
+                'schs0310',
+                'schs0331',
+                'schs0332',
+                'schw0021',
+                'schw0023',
+                'schw0026']
+    
+    for d in dup:
+        c = db.cursor()
+    
+        q = c.execute("""SELECT A.item_index from odata_dataset_dimension_item A
+                          INNER JOIN
+                          (select dataset,
+                                   dimension,
+                                   item,
+                                   item_index,
+                                   RANK() OVER(PARTITION BY dataset, dimension, item ORDER BY item_index ASC) rank_no
+                            FROM odata_dataset_dimension_item
+                            WHERE dataset=?) B on A.item_index = B.item_index
+                            WHERE B.rank_no > 1;""", (d,))
+                            
+        dup_index = q.fetchall()
+        #print(dup_index)
+        
+        for i in dup_index:
+            c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index=?""", (i[0],))
+            c.execute("""DELETE FROM odata_dataset_dimension_item WHERE item_index=?""", (i[0],))
+            
+            
+        db.commit()
+    
 
 
 # start_from can optionally specify a position in dataset_collection to start
@@ -2054,6 +2492,12 @@ def load_metadata():
 def load_datasets(start_from = None):
 
     warn("load_datasets()\n")
+    
+    # List of datasets not to load due to issues in the metadata or missing APIs
+    not_load = ['care0147',
+                'hlth0602',
+                'hlth1309',
+                'hlth1310']
 
     c = db.cursor()
 
@@ -2064,7 +2508,12 @@ def load_datasets(start_from = None):
 
     r = q.fetchone()
     while (r):
-        load_dataset(r[0], r[1])
+        if (r[0] not in not_load):
+            time_start = time.time
+            print(r[0], time_start)
+            load_dataset(r[0], r[1])
+            time_end = time.time
+            print(r[0], time_end)
         r = q.fetchone()
 
     # Generate warnings for the cubes that don't have hrefs.
@@ -2081,6 +2530,144 @@ def load_datasets(start_from = None):
 def load_all():
     load_metadata()
     load_datasets()
+    
+
+def fix_item_id():
+    c = db.cursor()
+    q = c.execute('''SELECT item.item_index,
+                          item.item,
+                          dim.item
+                    FROM odata_dataset_dimension_item AS item
+                    JOIN dataset_dimension AS dim ON item.item_index = dim.item_index AND dim.dataset = item.dataset AND dim.dimension = item.dimension
+                    WHERE dim.item IS NOT item.item''')
+    items = q.fetchall()
+    
+    print("Matching complete, proceeding to update")
+    
+    for row in items:
+        if int(row[1]) == 0 | len(str(row[1])) > len(str(row[2])):
+            c.execute('''UPDATE odata_dataset_dimension_item
+                          SET item = ?
+                          WHERE item_index IS ?''', (row[2],row[0]))
+        elif len(str(row[1])) < len(str(row[2])):
+            c.execute('''UPDATE dataset_dimension
+                          SET item = ?
+                          WHERE item_index IS ?''', (row[1],row[0]))
+        else:
+            raise AssertionError("Could not determine correct item ID")
+            
+    db.commit()
+    
+# Checks the contents of the ugc folder against the files listed in
+# the database cache and removes any that are not listed.
+def clean_ugc():
+    os.chdir('ugc')
+    ugc = os.listdir()
+    #print(ugc)
+    
+    c = db.cursor()
+    
+    q = c.execute("""SELECT filename FROM spider_uri_cache""")
+    
+    cache = q.fetchall()
+    
+    for i in range(len(cache)):
+        a = cache[i]
+        cache[i] = a[0]
+    
+    #print(cache)
+    
+    
+    for file in ugc:
+        if file not in cache:
+            os.remove(file)
+            
+    os.chdir('..')
+    
+    
+# Exracts data from the database and reformats it into a cube structure
+def extract_data(dataset):
+    
+    datafile = [dataset,'_data.csv']
+    datafile = ''.join(datafile)
+    
+    c = db.cursor()
+    
+    q = c.execute("SELECT dimension FROM odata_dataset_dimension WHERE dataset = ?", (dataset,))
+    
+    dimensions = q.fetchall()
+    
+    dataquery = ['WITH m AS (select fact, value from dataset_measure where dataset = \'',dataset,'\'), d AS (SELECT fact']
+    colnamequery = [' SELECT value']
+    
+    for d in dimensions:
+        concat = [', GROUP_CONCAT(CASE WHEN "dimension" == \'',d[0],'\' THEN item END) as ',d[0],'_id ']
+        concat = ''.join(concat)
+        
+        #print(concat)
+        dataquery.append(concat)
+        
+        idname = [', ',d[0],'_id']
+        idname = ''.join(idname)
+        colnamequery.append(idname)
+                
+        dimquery = ['WITH pre_table AS (select di.item AS item,	di.hierarchy, di.sort_order, dii.lang, dii.description, dii.notes FROM odata_dataset_dimension_item AS di JOIN odata_dataset_dimension_item_info AS dii on di.item_index = dii.item_index WHERE di.dataset = \'',
+                    dataset,
+                    '\' AND di.dimension = \'',
+                    d[0],
+                    '\') SELECT item, hierarchy, sort_order, GROUP_CONCAT(CASE WHEN "lang" == \'cy-gb\' THEN description END) as description_cy, GROUP_CONCAT(CASE WHEN "lang" == \'en-gb\' THEN description END) as description_en, GROUP_CONCAT(CASE WHEN "lang" == \'cy-gb\' THEN notes END) as notes_cy, GROUP_CONCAT(CASE WHEN "lang" == \'en-gb\' THEN notes END) as notes_en FROM pre_table GROUP BY item']
+        
+        dimquery = ''.join(dimquery)
+        
+        #print(dimquery)
+        
+        q = c.execute(dimquery)
+        
+        output = q.fetchall()
+        #print(output)
+        
+        dimfile = (dataset,'_',d[0],'.csv')
+        dimfile = ''.join(dimfile)
+        
+        with open(dimfile,'a',newline='') as file:
+            writer = csv.writer(file)
+            colnames = ['item',
+                        'hierarchy',
+                        'description_cy',
+                        'description_en',
+                        'notes_cy',
+                        'notes_en']
+            writer.writerow(colnames)
+            
+            for row in output:
+                writer.writerow(row)
+                
+    colnamequery = ''.join(colnamequery)
+    dataquery.append(' FROM dataset_dimension WHERE dataset = \'')
+    dataquery.append(dataset)
+    dataquery.append('\' GROUP BY fact) ')
+    dataquery.append(colnamequery)
+    dataquery.append(' FROM m JOIN d ON m.fact = d.fact')
+    
+    dataquery = ''.join(dataquery)
+    print(dataquery)
+    
+    q = c.execute(dataquery)
+    
+    data = q.fetchall()
+    
+    with open(datafile,'a',newline='') as file:
+        writer = csv.writer(file)
+        colnames = ['value']
+        for d in dimensions:
+            colname = (d[0],'_id')
+            colname = ''.join(colname)
+            colnames.append(colname)
+        writer.writerow(colnames)
+            
+        for row in data:
+            writer.writerow(row)
+    
 
 
 
