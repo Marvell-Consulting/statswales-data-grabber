@@ -2598,7 +2598,7 @@ def extract_data(dataset):
     dimensions = q.fetchall()
     
     dataquery = ['WITH m AS (select fact, value from dataset_measure where dataset = \'',dataset,'\'), d AS (SELECT fact']
-    colnamequery = [' SELECT value']
+    colnamequery = [' SELECT d.fact, value']
     
     for d in dimensions:
         concat = [', GROUP_CONCAT(CASE WHEN "dimension" == \'',d[0],'\' THEN item END) as ',d[0],'_id ']
@@ -2659,7 +2659,7 @@ def extract_data(dataset):
     
     with open(datafile,'a',newline='') as file:
         writer = csv.writer(file)
-        colnames = ['value']
+        colnames = ['fact','value']
         for d in dimensions:
             colname = (d[0],'_id')
             colname = ''.join(colname)
