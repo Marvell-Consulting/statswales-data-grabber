@@ -75,6 +75,7 @@ import time
 import re
 import collections
 import csv
+import pandas as pd
 
 # Parsing Libraries
 # We assume that StatsWales2 is trustworthy so do not currently defend against
@@ -2136,7 +2137,9 @@ def load_dataset(dataset, href):
 
     c = db.cursor()
     c.execute("SAVEPOINT load_dataset");
-
+    
+    mis_list = []  #empty list to record mismatches
+    
     def load_from(local_file, lang, insert, check):
 
         # Save the existing row factory because we want to use it for everything
@@ -2206,6 +2209,7 @@ def load_dataset(dataset, href):
                 # Some datasets (for example hous0403/Area) do not have the
                 # correct values in odata_dataset_dimension_item.item so try to
                 # match based on the alternate code instead.
+                
                 q = c.execute(SELECT("odata_dataset_dimension_item_alternative",
                     ("item_index",),
                     "WHERE `dataset` = ? AND `alternative_item` = ?"),
@@ -2224,10 +2228,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                       (item_index,))
                         r = q.fetchone()
-                        mis = [dataset,dimension,item_index,r[0],item]
-                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(mis)
+                        mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                        if mis not in mis_list:  #avoid duplicating information
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            mis_list.append(mis)
                         return item_index
                 
                 # Try removing decimals with trailing zeroes from item (converting float to int)
@@ -2251,10 +2257,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                           (item_index,))
                             r = q.fetchone()
-                            mis = [dataset,dimension,item_index,r[0],item]
-                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                                writer = csv.writer(f)
-                                writer.writerow(mis)
+                            mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                            if mis not in mis_list:  #avoid duplicating information
+                                with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                    writer = csv.writer(f)
+                                    writer.writerow(mis)
+                                mis_list.append(mis)
                             return item_index
                     
                 # We can also try the same on the metadata side
@@ -2275,10 +2283,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                              (item_index,))
                         r = q.fetchone()
-                        mis = [dataset,dimension,item_index,r[0],item]
-                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(mis)
+                        mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                        if mis not in mis_list:  #avoid duplicating information
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            mis_list.append(mis)
                         return item_index
                     
                 #Try rounding metadata item to 1 decimal place
@@ -2299,10 +2309,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                       (item_index,))
                         r = q.fetchone()
-                        mis = [dataset,dimension,item_index,r[0],item]
-                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(mis)
+                        mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                        if mis not in mis_list:  #avoid duplicating information
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            mis_list.append(mis)
                         return item_index
                     
                 #Try rounding metadata item to 2 decimal places
@@ -2323,10 +2335,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                       (item_index,))
                         r = q.fetchone()
-                        mis = [dataset,dimension,item_index,r[0],item]
-                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(mis)
+                        mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                        if mis not in mis_list:  #avoid duplicating information
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            mis_list.append(mis)
                         return item_index
                     
                                    
@@ -2350,10 +2364,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                       (item_index,))
                         r = q.fetchone()
-                        mis = [dataset,dimension,item_index,r[0],item]
-                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(mis)
+                        mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                        if mis not in mis_list:  #avoid duplicating information
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
+                            mis_list.append(mis)
                         return item_index
                 
                 # Sometimes, mainly in the Welsh version, there are non-ASCII characters that
@@ -2378,10 +2394,12 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                       (item_index,))
                             r = q.fetchone()
-                            mis = [dataset,dimension,item_index,r[0],item]
-                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
-                                writer = csv.writer(f)
-                                writer.writerow(mis)
+                            mis = [dataset,dimension,item_index,r[0],item,alt_item,alt_desc]
+                            if mis not in mis_list:  #avoid duplicating information
+                                with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                    writer = csv.writer(f)
+                                    writer.writerow(mis)
+                                mis_list.append(mis)
                             return item_index
 
                 
