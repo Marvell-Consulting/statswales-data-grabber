@@ -80,3 +80,10 @@ $ ../../compress-ugc
 After compression, spider.py will still be able to automatically use the files
 rather than redownloading them.
 
+## Additional requirements
+
+The item_id_mismatch.csv, item_id_mismatch_new.csv and the extra.datasetdimensionitems_fixed.json sould be put in the same directory.
+
+item_id_mismatch is a list of item ids that need to be cnaged as they are incorrect in the metadata, and the json file contains the corrected versions.
+item_id_mismatch_new is an empty csv with just headers where any additinal item codes that do not match will be recorded.
+
