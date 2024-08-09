@@ -556,6 +556,15 @@ def render_grid_report(dataset, x, y) -> str:
         if v not in dimensions:
             flask.abort(404)
 
+    # for each dimension in x:
+    # number of rows occupied for hierarchy
+    # number of cols occupied by values
+    # and vice-versa for each dimension in y.
+    #
+    # count them first to lay out table headings
+    # query them later for cell values.
+
+
 
     return render_request(
             Title = dataset,
