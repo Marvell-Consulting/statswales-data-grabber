@@ -6,6 +6,7 @@ A small tool to get data from the existing StatsWales system
 
 ```
 $ pip3 install requests
+$ pip3 install Flask
 $ pip3 install zstandard
 ```
 
@@ -79,4 +80,8 @@ $ ../../compress-ugc
 
 After compression, spider.py will still be able to automatically use the files
 rather than redownloading them.
+
+## visualise.py
+
+The visualiser.
 
