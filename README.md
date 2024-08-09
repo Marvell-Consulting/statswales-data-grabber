@@ -6,6 +6,7 @@ A small tool to get data from the existing StatsWales system
 
 ```
 $ pip3 install requests
+$ pip3 install zstandard
 ```
 
 You need to install the request module before running
@@ -49,4 +50,17 @@ dbdiagram.io](https://dbdiagram.io/d/StatsWales-E-R-diagram-6508558f02bd1c4a5ec9
 See the block comment at the top of spider.py for more information about how to
 use it.
 
+## compress-ugc
+
+Once a snapshot has been created you can compress the downloaded files to
+approximately 3.3GiB with the compress-ugc utility.
+Run it in the snapshot/XXXX-XX-XX/ directory:
+
+```
+$ cd snapshots/2024-08-06/
+$ ../../compress-ugc
+```
+
+After compression, spider.py will still be able to automatically use the files
+rather than redownloading them.
 

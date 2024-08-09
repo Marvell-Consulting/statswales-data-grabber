@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Compress the contents of ugc.
+#
+# Can be run repeatedly without affecting already compressed files.
+#
+#
+# Andy Bennett <andyjpb@register-dynamics.co.uk>, 2024/07/09 16:47.
+
+
+mkdir -p ugc/zstd/
+
+
+# Naive version for reference.
+for f in `ls ugc/`; do
+
+	# Remove uncompressed files when a compressed version exists.
+	if [ -f ugc/zstd/$f ]; then
+		rm -f ugc/$f
+		echo "$f  [Pruned]"
+	elif [ -f ugc/$f ]; then
+		zstd -zi --rm -i ugc/$f -o ugc/zstd/$f
+		echo "$f  [Compressed]"
+	fi
+
+done;
+
+
+# zstd --train-cover $(for f in `ls ugc |head -n27208`; do echo ugc/$f; done)
+

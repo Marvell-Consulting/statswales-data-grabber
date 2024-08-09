@@ -63,10 +63,7 @@
 ################################################################################
 
 
-import os
 import sys
-import pathlib
-import hashlib
 import sqlite3
 import codecs
 import urllib
@@ -74,6 +71,8 @@ import requests
 import time
 import re
 import collections
+
+import ugc
 
 # Parsing Libraries
 # We assume that StatsWales2 is trustworthy so do not currently defend against
@@ -1102,7 +1101,7 @@ def fetch_uri(base, path=None):
 
     # Cache hit: just return it
     if (local is not None):
-        warn(" using ugc/%s... from cache.\n" % local["filename"][:7])
+        warn(" using ugc:%s... from cache.\n" % local["filename"][:7])
         return local
 
     # Fetch the URI from the Internet.
@@ -1128,21 +1127,10 @@ def fetch_uri(base, path=None):
         warn("fetch_uri: %s" % pretty_uri)
 
     # Cache the response body.
-    filename = "temp-%d" % os.getpid()
-    digest   = hashlib.sha256()
-
-    with open("tmp/%s" % filename, 'xb') as fd:
+    with ugc.allocate(int(response.headers['content-length'])) as fd:
         for chunk in response.iter_content(chunk_size=4096):
             fd.write(chunk)
-            digest.update(chunk)
-
-    # Rename it the first time as we know what it is now, but there's a chance
-    # we may not be able to get it into the URI cache if for some reason it's
-    # already there (either because another URI results in exactly the same
-    # document or there's some vestigial traces of cache entries that also
-    # failed or have not been cleared up completely.
-    os.rename("tmp/%s" % filename, "tmp/%s" % digest.hexdigest())
-
+        filename = fd.close()
 
     # Populate the cache.
     c = db.cursor()
@@ -1157,11 +1145,11 @@ def fetch_uri(base, path=None):
                 response.headers['pragma'],
                 response.headers['expires'],
                 response.headers['date'],
-                digest.hexdigest()))
+                filename))
 
-    os.rename("tmp/%s" % digest.hexdigest(), "ugc/%s" % digest.hexdigest())
+    ugc.commit(filename)
 
-    warn(" [%d], cached as ugc/%s...\n" % (response.status_code, digest.hexdigest()[:7]))
+    warn(" [%d], cached as ugc:%s...\n" % (response.status_code, filename[:7]))
 
     c.execute("RELEASE fetch_uri")
 
@@ -1170,11 +1158,6 @@ def fetch_uri(base, path=None):
     local = check_uri_cache(uri, now)
 
     return local
-
-
-# Generates a path to a file in the User Generated Content store.
-def from_ugc(filename):
-    return "ugc/%s" % filename
 
 
 # The content-type response header is a string containing a MIME Type followed
@@ -1273,7 +1256,7 @@ def load_json_pages(local_file, cursor, insert_procs):
 
     while (more):
 
-        filename = from_ugc(local_file["filename"])
+        filename = local_file["filename"]
 
         content_type = parse_content_type(local_file["content-type"])
         mime_type    = content_type[0]
@@ -1283,7 +1266,7 @@ def load_json_pages(local_file, cursor, insert_procs):
             raise AssertionError("load_odata_catalogue: Expected mime-type of application/json but %s has %s!" % (filename, content_type))
 
         tree = {}
-        with open(filename, 'rb') as fd:
+        with ugc.open(filename) as fd:
             tree = json.load(fd)
 
         value = tree["value"]
@@ -1333,7 +1316,8 @@ def load_dataset_collections():
     def load_from(base, lang):
 
         local    = fetch_uri(base, ("dataset"));
-        filename = from_ugc(local["filename"])
+        filename = local["filename"]
+        fd       = ugc.open(filename)
 
         content_type = parse_content_type(local["content-type"])
         mime_type    = content_type[0]
@@ -1342,7 +1326,7 @@ def load_dataset_collections():
         if (mime_type != "application/atomsvc+xml"):
             raise AssertionError("load_dataset_collections: Expected mime-type of application/atomsvc+xml but %s has %s!" % (filename, content_type))
 
-        tree       = xml.etree.ElementTree.parse(filename)
+        tree       = xml.etree.ElementTree.parse(fd)
         workspaces = tree.findall("./{http://www.w3.org/2007/app}workspace")
 
         if (len(workspaces) != 1):
@@ -1398,7 +1382,8 @@ def load_dataset_properties():
 
     def load_from(local, lang):
 
-        filename = from_ugc(local["filename"])
+        filename = local["filename"]
+        fd       = ugc.open(filename)
 
         content_type = parse_content_type(local["content-type"])
         mime_type    = content_type[0]
@@ -1407,7 +1392,7 @@ def load_dataset_properties():
         if (mime_type != "application/xml"):
             raise AssertionError("load_dataset_properties: Expected mime-type of application/xml but %s has %s!" % (filename, content_type))
 
-        tree          = xml.etree.ElementTree.parse(filename)
+        tree          = xml.etree.ElementTree.parse(fd)
         data_services = tree.findall("./{http://schemas.microsoft.com/ado/2007/06/edmx}DataServices")
 
         if (len(data_services) != 1):
@@ -2114,15 +2099,8 @@ def initialise():
 
     upgrade_database()
 
-
-    # Initialise the filesystem.
-
-    # "User Generated Content" - i.e. stuff we've downloaded.
-    pathlib.Path("ugc/").mkdir(exist_ok=True)
-
-    # Temporary files
-    pathlib.Path("tmp/").mkdir(exist_ok=True)
-
+    # Initialise the user generated content store.
+    ugc.init()
 
     # Initialise the HTTP Session.
     http = requests.Session()
