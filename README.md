@@ -50,6 +50,22 @@ dbdiagram.io](https://dbdiagram.io/d/StatsWales-E-R-diagram-6508558f02bd1c4a5ec9
 See the block comment at the top of spider.py for more information about how to
 use it.
 
+## take-snapsot
+
+This script uses spider.py to create a local mirror of StatsWales2.
+
+```
+$ ./take-snapshot
+```
+
+...will create a fresh directory in snapshots/ named after today's date. All
+the OData will be downloaded from the StatsWales2 service and loaded into the
+an SQLite database called statswales2.hypercube.sqlite.
+
+Each snapshot will download approximate 147GiB of data and require the same
+amount of local storage space and does not share any storage or state with any
+other snapshot.
+
 ## compress-ugc
 
 Once a snapshot has been created you can compress the downloaded files to

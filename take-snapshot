@@ -1,0 +1,40 @@
+#!/usr/bin/python3
+
+################################################################################
+#
+# take-snapshot.py
+#
+# Create a daily mirror of StatsWales2 as it is right now.
+#
+# $ ./take-snapshot
+#
+#
+# Andy Bennett <andyjpb@register-dynamics.co.uk>, 2024/08/06 22:38.
+#
+################################################################################
+
+
+import pathlib
+import datetime
+import os
+import spider
+import shutil
+import glob
+
+root  = "snapshots/"
+today = datetime.datetime.today().strftime('%Y-%m-%d')
+path  = pathlib.Path(root, today)
+
+pathlib.Path(root).mkdir(exist_ok=True)
+path.mkdir()
+
+os.chdir(path.as_posix())
+
+spider.initialise()
+
+ugc_extras = glob.glob("../../ugc/extra.*")
+for f in ugc_extras:
+    shutil.copy2(f, "./ugc/")
+
+spider.load_metadata()
+
