@@ -71,6 +71,7 @@ import requests
 import time
 import re
 import collections
+import csv
 
 import ugc
 
@@ -1948,15 +1949,34 @@ def load_odata_dataset_dimension_items():
     c = db.cursor()
     c.execute("SAVEPOINT load_odata_dataset_dimension_items");
 
-    def load_from(local_file, lang, insert, check):
+    def dimension_name_to_index(lang):
+        def closure(keys, dictionary):
+            v = dictionary[keys[lang]]
+            q = c.execute(SELECT("odata_dataset_dimension_info",
+                    ("dimension_index",),
+                    "WHERE `lang` = ? AND `description` = ?"),
+                    (lang, v))
+            r = q.fetchone()
+            if (r):
+                v = r[0]
+                # Ensure that only one item was found.
+                if (q.fetchone()):
+                    raise AssertionError("dimension_name_to_index(): Multiple results found for dimension '%s' with lang '%s' but a maximum of one was expected!\n" % (v, lang))
+                else:
+                    return r
+                raise AssertionError("dimension_name_to_index(): Unable to find dimension_index for dimension '%s' with lang '%s'\n" % (v, lang))
+
+        return closure
+
+    def load_from(local_file, lang, insert, check, index):
 
         procs = []
 
         # Declare which tables we want to load and how we want to load them.
 
         odata_dataset_dimension_item_map = []
-        autoincrement                    = make_autoincrement(0)
-        autoincrement_info               = make_autoincrement(0)
+        autoincrement                    = make_autoincrement(index)
+        autoincrement_info               = make_autoincrement(index)
 
         # Ignore the dimension field for the odata_dataset_dimension_item table in
         # every language except English because that's the only language where
@@ -2014,7 +2034,7 @@ def load_odata_dataset_dimension_items():
         # specified (non-"") for each item.
         for n in (1, 2, 3):
 
-            autoincrement_alternative = make_autoincrement(0)
+            autoincrement_alternative = make_autoincrement(index)
 
             odata_dataset_dimension_item_alternative_map = [
                     # The autoincrement counter will increment for every
@@ -2032,6 +2052,8 @@ def load_odata_dataset_dimension_items():
         # Load the tables from each page of OData JSON.
         load_json_pages(local_file, c, procs)
 
+        return autoincrement(None,None)
+
 
     # For English (it must be English because of how the English dimension
     # names are used as keys), INSERT the rows into the
@@ -2046,8 +2068,30 @@ def load_odata_dataset_dimension_items():
     # DimensionNameWEL fields so we have to rely on the apparent fact the
     # dimension items appear in the same order for both the English and Welsh
     # versions of the service.
-    load_from(fetch_uri(ebu, ("discover", "datasetdimensionitems")), "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [])
-    load_from(fetch_uri(wbu, ("discover", "datasetdimensionitems")), "cy-gb", ["odata_dataset_dimension_item_info"], ["odata_dataset_dimension_item", "odata_dataset_dimension_item_alternative"])
+    index_en = load_from(fetch_uri(ebu, ("discover", "datasetdimensionitems")), "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [], 0)
+    index_cy = load_from(fetch_uri(wbu, ("discover", "datasetdimensionitems")), "cy-gb", ["odata_dataset_dimension_item_info"], ["odata_dataset_dimension_item", "odata_dataset_dimension_item_alternative"], 0)
+
+    if (index_en != index_cy):
+        raise AssertionError("load_odata_dataset_dimension_items: Welsh item_index does not match english item_index")
+
+
+    index = index_en
+
+    # Need to delete rows for dimension items where the item id is incorrect
+    with open('item_id_mismatch.csv') as f:
+        reader = csv.reader(f)
+        next(reader, None)
+        for row in reader:
+            q = c.execute('''SELECT item_index FROM odata_dataset_dimension_item WHERE dataset = ? AND dimension = ? AND item = ?''',(row[0],row[1],row[3]))
+
+            for p in q.fetchall():
+                c.execute('''DELETE FROM odata_dataset_dimension_item_info WHERE item_index = ?''',(p[0],))
+                c.execute('''DELETE FROM odata_dataset_dimension_item_alternative WHERE item_index = ?''',(p[0],))
+                c.execute('''DELETE FROM odata_dataset_dimension_item WHERE item_index = ?''',(p[0],))
+
+
+    load_from({"filename": "extra.datasetdimensionitems_fixed.json", "content-type": "application/json"}, "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [], index)
+    load_from({"filename": "extra.datasetdimensionitems_fixed.json", "content-type": "application/json"}, "cy-gb", ["odata_dataset_dimension_item_info"], ["odata_dataset_dimension_item", "odata_dataset_dimension_item_alternative"], index)
 
     c.execute("RELEASE load_odata_dataset_dimension_items")
 
@@ -2167,6 +2211,15 @@ def load_dataset(dataset, href):
                         if (q.fetchone()):
                             print("find_item_index(): Multiple results found for item_int '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item_int, dimension, dataset))
                         else:
+                            q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                          (item_index,))
+                            r = q.fetchone()
+                            mis = [dataset,dimension,item_index,r[0],item]
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
                             return item_index
 
                 # We can also try the same on the metadata side
@@ -2182,7 +2235,65 @@ def load_dataset(dataset, href):
                     if (q.fetchone()):
                         print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
                     else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                             (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
                         return item_index
+
+                # Try rounding metadata item to 1 decimal place
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND ROUND(item,1) = ?"),
+                              (dataset, dimension, item))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+
+                # Try rounding metadata item to 2 decimal places
+                q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND ROUND(item,2) = ?"),
+                              (dataset, dimension, item))
+
+                r = q.fetchone()
+                if (r):
+                    item_index = r[0]
+                    # Ensure that only one item was found.
+                    if (q.fetchone()):
+                        print("find_item_index(): Multiple results found for alt_item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (alt_item, dimension, dataset))
+                    else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
+                        return item_index
+
 
                 # Some datasets (for example hous0403/Area) do not have the
                 # correct values in odata_dataset_dimension_item.item so try to
@@ -2199,6 +2310,15 @@ def load_dataset(dataset, href):
                     if (q.fetchone()):
                         print("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
                     else:
+                        q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                        r = q.fetchone()
+                        mis = [dataset,dimension,item_index,r[0],item]
+                        with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(mis)
                         return item_index
 
                 # Sometimes, mainly in the Welsh version, there are non-ASCII characters that
@@ -2218,8 +2338,16 @@ def load_dataset(dataset, href):
                         if (q.fetchone()):
                             print("find_item_index(): Multiple results found for description '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (description, dimension, dataset))
                         else:
+                            q = c.execute(SELECT("odata_dataset_dimension_item",
+                                             ("item",),
+                                             "WHERE `item_index` = ?"),
+                                      (item_index,))
+                            r = q.fetchone()
+                            mis = [dataset,dimension,item_index,r[0],item]
+                            with open(r'item_id_mismatch_new.csv','a',newline='') as f:
+                                writer = csv.writer(f)
+                                writer.writerow(mis)
                             return item_index
-
 
 
                 raise AssertionError("find_item_index(): Could not resolve item '%s' with description '%s' in dimension '%s' localised as '%s' in language '%s' of dataset '%s'!\n" % (item, description, dimension, d["dimension_localised"], lang, dataset))
@@ -2316,7 +2444,6 @@ def load_metadata():
         c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index IN ?""", dup_index)
 
 
-
 # start_from can optionally specify a position in dataset_collection to start
 # from. This is useful when debugging load_dataset().
 # Depends on dataset_collection being loaded.
@@ -2324,8 +2451,10 @@ def load_datasets(start_from = None):
 
     warn("load_datasets()\n")
 
-    # List of datasets not to load due to issues with duplication in the metadata
-    not_load = ['hlth1309',
+    # List of datasets not to load due to issues in the metadata or missing APIs
+    not_load = ['care0147',
+                'hlth0602',
+                'hlth1309',
                 'hlth1310']
 
     c = db.cursor()
@@ -2359,6 +2488,33 @@ def load_datasets(start_from = None):
 def load_all():
     load_metadata()
     load_datasets()
+
+
+def fix_item_id():
+    c = db.cursor()
+    q = c.execute('''SELECT item.item_index,
+                          item.item,
+                          dim.item
+                    FROM odata_dataset_dimension_item AS item
+                    JOIN dataset_dimension AS dim ON item.item_index = dim.item_index AND dim.dataset = item.dataset AND dim.dimension = item.dimension
+                    WHERE dim.item IS NOT item.item''')
+    items = q.fetchall()
+
+    print("Matching complete, proceeding to update")
+
+    for row in items:
+        if int(row[1]) == 0 | len(str(row[1])) > len(str(row[2])):
+            c.execute('''UPDATE odata_dataset_dimension_item
+                          SET item = ?
+                          WHERE item_index IS ?''', (row[2],row[0]))
+        elif len(str(row[1])) < len(str(row[2])):
+            c.execute('''UPDATE dataset_dimension
+                          SET item = ?
+                          WHERE item_index IS ?''', (row[1],row[0]))
+        else:
+            raise AssertionError("Could not determine correct item ID")
+
+    db.commit()
 
 
 
