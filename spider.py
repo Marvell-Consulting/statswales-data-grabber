@@ -2471,9 +2471,10 @@ def load_metadata():
                             WHERE B.rank_no > 1;""", (d,))
 
         dup_index = q.fetchall()
+        for i in dup_index:
+            c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index=?""", (i[0],))
+            c.execute("""DELETE FROM odata_dataset_dimension_item WHERE item_index=?""", (i[0],))
 
-        c.execute("""DELETE FROM odata_dataset_dimension_item WHERE item_index IN ?""", dup_index)
-        c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index IN ?""", dup_index)
 
 
 # Loads each dataset in turn.
