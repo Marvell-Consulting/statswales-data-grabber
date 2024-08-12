@@ -2567,6 +2567,90 @@ def clean_ugc():
             os.remove(file)
             
     os.chdir('..')
+    
+    
+# Exracts data from the database and reformats it into a cube structure
+def extract_data(dataset):
+    
+    datafile = [dataset,'_data.csv']
+    datafile = ''.join(datafile)
+    
+    c = db.cursor()
+    
+    q = c.execute("SELECT dimension FROM odata_dataset_dimension WHERE dataset = ?", (dataset,))
+    
+    dimensions = q.fetchall()
+    
+    dataquery = ['WITH m AS (select fact, value from dataset_measure where dataset = \'',dataset,'\'), d AS (SELECT fact']
+    colnamequery = [' SELECT value']
+    
+    for d in dimensions:
+        concat = [', GROUP_CONCAT(CASE WHEN "dimension" == \'',d[0],'\' THEN item END) as ',d[0],'_id ']
+        concat = ''.join(concat)
+        
+        #print(concat)
+        dataquery.append(concat)
+        
+        idname = [', ',d[0],'_id']
+        idname = ''.join(idname)
+        colnamequery.append(idname)
+                
+        dimquery = ['WITH pre_table AS (select di.item AS item,	di.hierarchy, di.sort_order, dii.lang, dii.description, dii.notes FROM odata_dataset_dimension_item AS di JOIN odata_dataset_dimension_item_info AS dii on di.item_index = dii.item_index WHERE di.dataset = \'',
+                    dataset,
+                    '\' AND di.dimension = \'',
+                    d[0],
+                    '\') SELECT item, hierarchy, sort_order, GROUP_CONCAT(CASE WHEN "lang" == \'cy-gb\' THEN description END) as description_cy, GROUP_CONCAT(CASE WHEN "lang" == \'en-gb\' THEN description END) as description_en, GROUP_CONCAT(CASE WHEN "lang" == \'cy-gb\' THEN notes END) as notes_cy, GROUP_CONCAT(CASE WHEN "lang" == \'en-gb\' THEN notes END) as notes_en FROM pre_table GROUP BY item']
+        
+        dimquery = ''.join(dimquery)
+        
+        #print(dimquery)
+        
+        q = c.execute(dimquery)
+        
+        output = q.fetchall()
+        #print(output)
+        
+        dimfile = (dataset,'_',d[0],'.csv')
+        dimfile = ''.join(dimfile)
+        
+        with open(dimfile,'a',newline='') as file:
+            writer = csv.writer(file)
+            colnames = ['item',
+                        'hierarchy',
+                        'description_cy',
+                        'description_en',
+                        'notes_cy',
+                        'notes_en']
+            writer.writerow(colnames)
+            
+            for row in output:
+                writer.writerow(row)
+                
+    colnamequery = ''.join(colnamequery)
+    dataquery.append(' FROM dataset_dimension WHERE dataset = \'')
+    dataquery.append(dataset)
+    dataquery.append('\' GROUP BY fact) ')
+    dataquery.append(colnamequery)
+    dataquery.append(' FROM m JOIN d ON m.fact = d.fact')
+    
+    dataquery = ''.join(dataquery)
+    print(dataquery)
+    
+    q = c.execute(dataquery)
+    
+    data = q.fetchall()
+    
+    with open(datafile,'a',newline='') as file:
+        writer = csv.writer(file)
+        colnames = ['value']
+        for d in dimensions:
+            colname = (d[0],'_id')
+            colname = ''.join(colname)
+            colnames.append(colname)
+        writer.writerow(colnames)
+            
+        for row in data:
+            writer.writerow(row)
 
 
 
