@@ -2474,6 +2474,7 @@ def load_metadata():
         for i in dup_index:
             c.execute("""DELETE FROM odata_dataset_dimension_item_info WHERE item_index=?""", (i[0],))
             c.execute("""DELETE FROM odata_dataset_dimension_item WHERE item_index=?""", (i[0],))
+        db.commit()
 
 
 
