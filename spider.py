@@ -2468,7 +2468,7 @@ def load_metadata():
                                    RANK() OVER(PARTITION BY dataset, dimension, item ORDER BY item_index ASC) rank_no
                             FROM odata_dataset_dimension_item
                             WHERE dataset=?) B on A.item_index = B.item_index
-                            WHERE B.rank_no > 1;""", d)
+                            WHERE B.rank_no > 1;""", (d,))
 
         dup_index = q.fetchall()
 
