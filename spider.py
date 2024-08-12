@@ -2541,6 +2541,32 @@ def fix_item_id():
             raise AssertionError("Could not determine correct item ID")
 
     db.commit()
+    
+# Checks the contents of the ugc folder against the files listed in
+# the database cache and removes any that are not listed.
+def clean_ugc():
+    os.chdir('ugc')
+    ugc = os.listdir()
+    #print(ugc)
+    
+    c = db.cursor()
+    
+    q = c.execute("""SELECT filename FROM spider_uri_cache""")
+    
+    cache = q.fetchall()
+    
+    for i in range(len(cache)):
+        a = cache[i]
+        cache[i] = a[0]
+    
+    #print(cache)
+    
+    
+    for file in ugc:
+        if file not in cache:
+            os.remove(file)
+            
+    os.chdir('..')
 
 
 
