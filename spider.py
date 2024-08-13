@@ -2521,6 +2521,9 @@ def load_datasets(start_from = None):
         warn("load_datasets(): Ignoring %s.\n" % r[0])
         r = q.fetchone()
 
+    for d in not_load:
+        warn("load_datasets(): Skipping %s.\n" % d)
+
 
 def load_all():
     load_metadata()
