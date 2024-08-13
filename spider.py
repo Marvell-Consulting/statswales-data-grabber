@@ -2504,10 +2504,10 @@ def load_datasets(start_from = None):
     r = q.fetchone()
     while (r):
         if (r[0] not in not_load):
-            time_start = time.time
+            time_start = time.time()
             print(r[0], time_start)
             load_dataset(r[0], r[1])
-            time_end = time.time
+            time_end = time.time()
             print(r[0], time_end)
         r = q.fetchone()
 
