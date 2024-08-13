@@ -2552,7 +2552,7 @@ def fix_item_id():
             raise AssertionError("Could not determine correct item ID")
 
     db.commit()
-    
+
 # Checks the contents of the ugc folder against the files listed in
 # the database cache and removes any that are not listed.
 def clean_ugc():
