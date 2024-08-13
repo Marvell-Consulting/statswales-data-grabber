@@ -2559,27 +2559,27 @@ def clean_ugc():
     os.chdir('ugc')
     ugc = os.listdir()
     #print(ugc)
-    
+
     c = db.cursor()
-    
+
     q = c.execute("""SELECT filename FROM spider_uri_cache""")
-    
+
     cache = q.fetchall()
-    
+
     for i in range(len(cache)):
         a = cache[i]
         cache[i] = a[0]
-    
+
     #print(cache)
-    
-    
+
+
     for file in ugc:
         if file not in cache:
             os.remove(file)
-            
+
     os.chdir('..')
-    
-    
+
+
 # Exracts data from the database and reformats it into a cube structure
 def extract_data(dataset):
 
