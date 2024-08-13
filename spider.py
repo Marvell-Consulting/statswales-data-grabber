@@ -2429,7 +2429,7 @@ def load_dataset(dataset, href):
     c.execute("RELEASE load_dataset")
 
     end_time = time.time()
-    warn("load_dataset(%s): Loaded in %.1f seconds.\n" % (dataset, (end_time - start_time)))
+    warn("load_dataset(%s): Completed in %.1f seconds.\n" % (dataset, (end_time - start_time)))
 
 
 def load_metadata():
