@@ -2114,6 +2114,7 @@ def load_odata_dataset_dimension_items():
 def load_dataset(dataset, href):
 
     warn("load_dataset(%s)\n" % dataset)
+    start_time = time.time()
 
     c = db.cursor()
     c.execute("SAVEPOINT load_dataset");
@@ -2427,6 +2428,9 @@ def load_dataset(dataset, href):
 
     c.execute("RELEASE load_dataset")
 
+    end_time = time.time()
+    warn("load_dataset(%s): Loaded in %.1f seconds.\n" % (dataset, (end_time - start_time)))
+
 
 def load_metadata():
 
@@ -2504,11 +2508,7 @@ def load_datasets(start_from = None):
     r = q.fetchone()
     while (r):
         if (r[0] not in not_load):
-            time_start = time.time()
-            print(r[0], time_start)
             load_dataset(r[0], r[1])
-            time_end = time.time()
-            print(r[0], time_end)
         r = q.fetchone()
 
     # Generate warnings for the cubes that don't have hrefs.
