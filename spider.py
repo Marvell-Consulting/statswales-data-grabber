@@ -2518,7 +2518,7 @@ def load_datasets(start_from = None):
 
     r = q.fetchone()
     while (r):
-        warn("load_datasets: Ignoring %s\n" % r[0])
+        warn("load_datasets(): Ignoring %s.\n" % r[0])
         r = q.fetchone()
 
 
