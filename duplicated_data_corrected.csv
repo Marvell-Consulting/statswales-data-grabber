@@ -1,0 +1,60 @@
+﻿dimensionname_ENG,dimensionname_WEL,semantickey,code,description_ENG,description_WEL,SortOrder,hierarchy,notes_ENG,notes_WEL,altcode_1,altcode_2,altcode_3,dataset
+Measure,Mesur,,Red030,Red - % within 30 minutes,Coch ?  % o fewn 30 munud,,,,,,,,hlth1314
+Measure,Mesur,,Red030plus,Red - % 30 minutes plus,Coch ?  % dros 30 munud,,,,,,,,hlth1314
+Measure,Mesur,,Amber060,Amber - % within 60 minutes,Melyn -% o fewn 60 munud,,,,,,,,hlth1315
+Measure,Mesur,,Amber060plus,Amber - % 60 minutes plus,Melyn -% dros 60 munud,,,,,,,,hlth1315
+Description,Disgrifid,,L4x,Percentage achieving the expected level (L4),Canran sy'n cyrraedd lefel disgwyliedig (L4),,,,,,,,schs0003
+Description,Disgrifid,,L4,Percentage achieving Level 4,Canran yn cyrraedd Lefel 4,,L4x,,,,,,schs0003
+Description,Disgrifid,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L4x,,,,,,schs0003
+Description,Disgrifid,,L6plus,Percentage achieving Level 6 or above,Canran yn cyrraedd Lefel 6 neu fwy,,L4x,,,,,,schs0003
+Description,Disgrifiad,,L5x,Percentage achieving the expected level (L5),Canran sy'n cyrraedd lefel disgwyliedig (L5),,,,,,,,schs0004
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L5x,,,,,,schs0004
+Description,Disgrifiad,,L6,Percentage achieving Level 6,Canran yn cyrraedd Lefel 6,,L5x,,,,,,schs0004
+Description,Disgrifiad,,L7,Percentage achieving Level 7,Canran yn cyrraedd Lefel 7,,L5x,,,,,,schs0004
+Description,Disgrifiad,,L8,Percentage achieving Level 8 or above,Canran yn cyrraedd Lefel 8 neu fwy,,L5x,,,,,,schs0004
+Description,Disgrifiad,,EP,Exceptional Performance,Perfformiad Eithriadol,,L5x,,,,,,schs0004
+Description,Disgrifiad,,L5x,Percentage achieving the expected level (L5),Canran sy'n cyrraedd lefel disgwyliedig (L5),,,,,,,,schs0006
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L5x,,,,,,schs0006
+Description,Disgrifiad,,L6,Percentage achieving Level 6,Canran yn cyrraedd Lefel 6,,L5x,,,,,,schs0006
+Description,Disgrifiad,,L7,Percentage achieving Level 7,Canran yn cyrraedd Lefel 7,,L5x,,,,,,schs0006
+Description,Disgrifiad,,L8,Percentage achieving Level 8 or above,Canran yn cyrraedd Lefel 8 neu fwy,,L5x,,,,,,schs0006
+Description,Disgrifiad,,L5x,Percentage achieving the expected Outcome (Outcome 5),Canran sy'n cyrraedd deilliant disgwyliedig (deilliant 5),,,,,,,,schs0153
+Description,Disgrifiad,,L5,Percentage achieving Outcome 5,Canran yn cyrraedd deilliant 5,,L5x,,,,,,schs0153
+Description,Disgrifiad,,L6,Percentage achieving Outcome 6 or above,Canran yn cyrraedd deilliant 6 neu fwy,,L5x,,,,,,schs0153
+Description,Disgrifiad,,L5x,Percentage achieving the expected Outcome (Outcome 5),Canran sy'n cyrraedd deilliant disgwyliedig (deilliant 5),,,,,,,,schs0166
+Description,Disgrifiad,,L5,Percentage achieving Outcome 5,Canran yn cyrraedd deilliant 5,,L5x,,,,,,schs0166
+Description,Disgrifiad,,L6,Percentage achieving Outcome 6 or above,Canran yn cyrraedd deilliant 6 neu fwy,,L5x,,,,,,schs0166
+Description,Disgrifiad,,L4x,Percentage achieving the expected level (L4),Canran sy'n cyrraedd lefel disgwyliedig (L4),,,,,,,,schs0167
+Description,Disgrifiad,,L4,Percentage achieving Level 4,Canran yn cyrraedd Lefel 4,,L4x,,,,,,schs0167
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L5plus,,,,,,schs0167
+Description,Disgrifiad,,L5plus,Percentage achieving Level 5 or above,Canran yn cyrraedd Lefel 5 neu fwy,,L4x,,,,,,schs0167
+Description,Disgrifiad,,L6,Percentage achieving Level 6 or above,Canran yn cyrraedd Lefel 6 neu fwy,,L5plus,,,,,,schs0167
+Description,Disgrifiad,,L5x,Percentage achieving the expected level (L5),Canran sy'n cyrraedd lefel disgwyliedig (L5),,,,,,,,schs0168
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L5x,,,,,,schs0168
+Description,Disgrifiad,,L6plus,Percentage achieving Level 6 or above,Canran yn cyrraedd Lefel 6 neu fwy,,L5x,,,,,,schs0168
+Description,Disgrifiad,,L6,Percentage achieving Level 6,Canran yn cyrraedd Lefel 6,,L6plus,,,,,,schs0168
+Description,Disgrifiad,,L7,Percentage achieving Level 7,Canran yn cyrraedd Lefel 7,,L6plus,,,,,,schs0168
+Description,Disgrifiad,,L8,Percentage achieving Level 8 or above,Canran yn cyrraedd Lefel 8 neu fwy,,L6plus,,,,,,schs0168
+Description,Disgrifiad,,L5x,Percentage achieving the expected Outcome (Outcome 5),Canran sy'n cyrraedd deilliant disgwyliedig (deilliant 5),,,,,,,,schs0169
+Description,Disgrifiad,,L5,Percentage achieving Outcome 5,Canran yn cyrraedd deilliant 5,,L5x,,,,,,schs0169
+Description,Disgrifiad,,L6,Percentage achieving Outcome 6 or above,Canran yn cyrraedd deilliant 6 neu fwy,,L5x,,,,,,schs0169
+Description,Disgrifiad,,L4x,Percentage achieving the expected level (L4),Canran sy'n cyrraedd lefel disgwyliedig (L4),,,,,,,,schs0170
+Description,Disgrifiad,,L4,Percentage achieving Level 4,Canran yn cyrraedd Lefel 4,,L4x,,,,,,schs0170
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L4x,,,,,,schs0170
+Description,Disgrifiad,,L6plus,Percentage achieving Level 6 or above,Canran yn cyrraedd Lefel 6 neu fwy,,L4x,,,,,,schs0170
+Description,Disgrifiad,,L5x,Percentage achieving the expected level (L5),Canran sy'n cyrraedd lefel disgwyliedig (L5),,,,,,,,schs0171
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Canran yn cyrraedd Lefel 5,,L5x,,,,,,schs0171
+Description,Disgrifiad,,L6,Percentage achieving Level 6,Canran yn cyrraedd Lefel 6,,L5x,,,,,,schs0171
+Description,Disgrifiad,,L7,Percentage achieving Level 7,Canran yn cyrraedd Lefel 7,,L5x,,,,,,schs0171
+Description,Disgrifiad,,L8,Percentage achieving Level 8,Canran yn cyrraedd Lefel 8,,L5x,,,,,,schs0171
+Description,Disgrifiad,,L5x,Percentage achieving the expected level (L5),Percentage achieving the expected level (L5),,,,,,,,schs0172
+Description,Disgrifiad,,L5,Percentage achieving Level 5,Percentage achieving Level 5,,L5x,,,,,,schs0172
+Description,Disgrifiad,,L6,Percentage achieving Level 6,Percentage achieving Level 6,,L5x,,,,,,schs0172
+Description,Disgrifiad,,L7,Percentage achieving Level 7,Percentage achieving Level 7,,L5x,,,,,,schs0172
+Description,Disgrifiad,,L8,Percentage achieving Level 8 or more,Percentage achieving Level 8 or more,,L5x,,,,,,schs0172
+Effective period,Cyfnod effeithiol,,202324,2023-24,2023-24,,,,,,,,wrax0063
+Effective period,Cyfnod effeithiol,,202324td,2023-24 (to date),2023-24 (hyd yn hyn),,,This only represents the year to date.,Dim ond y flwyddyn hyd yn hyn a gynrychiolir yma.,,,,wrax0063
+Reporting period,Cyfnod adrodd,,202324,2023-24,2023-24,,,,,,,,wrax0101
+Reporting period,Cyfnod adrodd,,202324td,2023-24 (to date),2023-24 (hyd yn hyn),,,This only represents the year to date.,Dim ond y flwyddyn hyd yn hyn a gynrychiolir yma.,,,,wrax0101
+Period,Cyfnod,,202324,2023-24,2023-24,,,,,,,,wrax0102
+Period,Cyfnod,,202324td,2023-24 (to date),2023-24 (hyd yn hyn),,,This only represents the year to date.,Dim ond y flwyddyn hyd yn hyn a gynrychiolir yma.,,,,wrax0102
