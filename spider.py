@@ -305,7 +305,6 @@ db_schema = [
         #    secondary key to the odata_set_dimension table during the part of
         #    the load where we correlate the responses from each version of the
         #    OData API and as part of the PRIMARY KEY to
-        #    odata_dataset_dimension_info because we don't always have the
         #    value of dimension when loading that table.
         "CREATE TABLE `odata_dataset_dimension` (\n"
         "`dataset`	TEXT NOT NULL,\n"
@@ -1445,7 +1444,7 @@ def load_dataset_collections():
         load_collection(x, None, "cy-gb")
 
     # Datasets referenced by odata_catalogue.
-    for x in ["educ0192", "educ0196", "hlth0458", "hlth0459"]:
+    for x in ["educ0192", "educ0196", "hlth0458", "hlth0459","hlth0080"]:
         warn("load_dataset_collections: Loading missing dataset %s for en-gb.\n" % x)
         load_collection(x, None, "en-gb")
         warn("load_dataset_collections: Loading missing dataset %s for cy-gb.\n" % x)
@@ -1685,6 +1684,7 @@ def load_odata_catalogue():
     # For one language INSERT the rows into both tables and for every other
     # language check that the data matches in the odata_catalogue table and
     # insert the language specific data into the odata_catalogue_info table.
+
     load_from(fetch_uri(ebu, ("discover", "catalogue")), "en-gb", ["odata_catalogue", "odata_catalogue_info"], [])
     load_from(fetch_uri(wbu, ("discover", "catalogue")), "cy-gb", ["odata_catalogue_info"], ["odata_catalogue"])
 
@@ -2113,7 +2113,18 @@ def load_odata_dataset_dimension_items():
                 c.execute('''DELETE FROM odata_dataset_dimension_item_info WHERE item_index = ?''',(p[0],))
                 c.execute('''DELETE FROM odata_dataset_dimension_item_alternative WHERE item_index = ?''',(p[0],))
                 c.execute('''DELETE FROM odata_dataset_dimension_item WHERE item_index = ?''',(p[0],))
-
+                
+    # Also need to delete rows where item code is duplicated
+    with open('duplicated_data_corrected.csv') as f:
+        reader = csv.reader(f)
+        next(reader, None)
+        for row in reader:
+            q = c.execute('''SELECT item_index FROM odata_dataset_dimension_item WHERE dataset = ? AND dimension = ? AND item = ?''',(row[13],row[0].replace(" ",""),row[3]))
+            
+            for p in q.fetchall():
+                c.execute('''DELETE FROM odata_dataset_dimension_item_info WHERE item_index = ?''',(p[0],))
+                c.execute('''DELETE FROM odata_dataset_dimension_item_alternative WHERE item_index = ?''',(p[0],))
+                c.execute('''DELETE FROM odata_dataset_dimension_item WHERE item_index = ?''',(p[0],))
     
 
     load_from({"filename": "extra.datasetdimensionitems_fixed.json", "content-type": "application/json"}, "en-gb", ["odata_dataset_dimension_item", "odata_dataset_dimension_item_info", "odata_dataset_dimension_item_alternative"], [], index)
@@ -2191,19 +2202,24 @@ def load_dataset(dataset, href):
                 # First look up the code as it's authoritative and almost all
                 # datasets have the proper data in
                 # odata_dataset_dimension_item.item.
-                q = c.execute(SELECT("odata_dataset_dimension_item",
-                    ("item_index",),
-                    "WHERE `dataset` = ? AND `dimension` = ? AND `item` = ?"),
-                    (dataset, dimension, item))
+                
+                # Except for some datasets and dimensions where we know it will be wrong
+                x = ['schs0003','schs0004','schs0006','schs0153','schs0166','schs0167','schs0168','schs0169','schs0170','schs0171','schs0172','hlth1314','hlth1315','wrax0063','wrax0101','wrax0102']
+                y = ['Measure', 'Description','Effectiveperiod','Reportingperiod','Period']
+                if ((dataset not in x) | (dimension not in y)):
+                    q = c.execute(SELECT("odata_dataset_dimension_item",
+                                         ("item_index",),
+                                         "WHERE `dataset` = ? AND `dimension` = ? AND `item` = ?"),
+                                  (dataset, dimension, item))
 
-                r = q.fetchone()
-                if (r):
-                    item_index = r[0]
-                    # Ensure that only one item was found.
-                    if (q.fetchone()):
-                        print("find_item_index(): Multiple results found for item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item, dimension, dataset))
-                    else: 
-                        return item_index
+                    r = q.fetchone()
+                    if (r):
+                        item_index = r[0]
+                        # Ensure that only one item was found.
+                        if (q.fetchone()):
+                            print("find_item_index(): Multiple results found for item '%s' in dimension '%s' of dataset '%s' but a maximum of one was expected!\n" % (item, dimension, dataset))
+                        else: 
+                            return item_index
                     
                 
                 # Some datasets (for example hous0403/Area) do not have the
@@ -2283,7 +2299,7 @@ def load_dataset(dataset, href):
                                              "WHERE `item_index` = ?"),
                                              (item_index,))
                         r = q.fetchone()
-                        mis = [dataset,dimension,item_index,r[0],item,alt_item,description]
+                        mis = [dataset,dimension,item_index,r[0],item,alt_item,re.sub(r'[^\x00-\x7F]+','?', description)]
                         if mis not in mis_list:  #avoid duplicating information
                             with open(r'item_id_mismatch_new.csv','a',newline='') as f:
                                 writer = csv.writer(f)
@@ -2446,7 +2462,22 @@ def load_dataset(dataset, href):
     # the language specific dimension metadata.
     load_from(fetch_uri(ebu, ("dataset", href)), "en-gb", ["dataset_measure", "dataset_dimension", "dataset_dimension_alternative"], [])
     load_from(fetch_uri(wbu, ("dataset", href)), "cy-gb", [], ["dataset_measure", "dataset_dimension", "dataset_dimension_alternative"])
-
+    
+    # Need to correct some item ids in the data where the metadata has been corrected
+    x = ['schs0003','schs0004','schs0006','schs0153','schs0166','schs0167','schs0168','schs0169','schs0170','schs0171','schs0172','hlth1314','hlth1315','wrax0063','wrax0101','wrax0102']
+    if (dataset in x):
+         with open('duplicated_data_corrected.csv') as f:
+             reader = csv.reader(f)
+             for row in reader:
+                 if (row[13] == dataset):
+                     q = c.execute('''SELECT item_index FROM odata_dataset_dimension_item WHERE dataset = ? AND dimension = ? AND item = ?''',(row[13],row[0].replace(" ",""),row[3]))
+                     r = q.fetchone()
+                     if (r):
+                         c.execute('''UPDATE dataset_dimension SET item = ?, hierarchy = ? WHERE item_index = ?''',(row[3],row[7],r[0]))
+                         if (q.fetchone()):
+                             raise AssertionError("More than one match when fixing item codes")
+        
+    
     c.execute("RELEASE load_dataset")
 
 
@@ -2515,7 +2546,8 @@ def load_datasets(start_from = None):
     not_load = ['care0147',
                 'hlth0602',
                 'hlth1309',
-                'hlth1310']
+                'hlth1310',
+                'schw0022']
 
     c = db.cursor()
 
