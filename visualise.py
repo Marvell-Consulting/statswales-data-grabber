@@ -235,11 +235,18 @@ def TH(*contents, colspan = None, rowspan = None):
         attribs["rowspan"] = str(rowspan)
     return element("th", attribs, *contents)
 
-def TD(*contents, classes = []):
-    if (len(classes) == 0):
-        return element("td", {}, *contents)
-    else:
-        return element("td", {"class": ", ".join(classes),}, *contents)
+#def TD(*contents, classes = []):
+#    if (len(classes) == 0):
+#        return element("td", {}, *contents)
+#    else:
+#        return element("td", {"class": ", ".join(classes),}, *contents)
+def TD(*contents, colspan = None, classes = []):
+    attribs = {}
+    if (colspan != None):
+        attribs["colspan"] = str(colspan)
+    if (len(classes) > 0):
+        attribs["classes"] = ", ".join(classes)
+    return element("td", attribs, *contents)
 
 def FORM(*contents, enctype = "application/x-www-form-urlencoded"):
     return element("form",
