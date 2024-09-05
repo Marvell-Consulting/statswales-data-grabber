@@ -13,6 +13,7 @@
 # https://flask.palletsprojects.com/en/3.0.x/installation/
 #
 # $ pip3 install Flask
+# $ pip3 install more_itertools
 #
 #
 # Andy Bennett <andyjpb@register-dynamics.co.uk>, 2024/05/30 14:23.
@@ -27,6 +28,8 @@ import xml.etree.ElementTree
 import time
 import collections
 import urllib
+import re
+import more_itertools
 
 
 ################################################################################
@@ -393,6 +396,7 @@ def render_request(Title = None, Menu = None, Main = None, Footer = None):
     if (Menu is None):
         Menu = MENU(
                 ("/", "Datasets"),
+                ("/filter-cubes-by-dimension/", "Filters"),
                 )
 
     if (Main is None):
@@ -713,7 +717,157 @@ def reference_table(dataset, dimension) -> str:
                     TBODY(
                         *[TR(*[TD() if (c is None) else TD("%s" % c, classes = ["s"] if (t == "symbol") else ["t"]) for c, t in zip(r, col_types)]) for r in r]),
                 )))
+# Find all the cubes that match the given criteria.
+# Criteria is a list of dimension names and, optionally, possible values for
+# those dimensions.
+# criteria - Dimension(Value,value...);Dimension;...
+# FIXME: Decode values so that [,()] can appear in dimension names and values.
+@app.route("/filter-cubes-by-dimension/<criteria>")
+def filter_cubes_by_dimension(criteria) -> str:
 
+    criteria = list(filter(None, criteria.split(";")))
+
+    # Regex to match and bind "Dimension(Value...)".
+    p = re.compile(r"^([^(]*)\(([^)]*)\)$")
+
+    filtered_dimensions = []
+    filters             = {}
+
+    for c in criteria:
+        m = p.match(c)
+        if m != None:
+            # "Dimension(Value...)"
+            name          = m.group(1)
+            values        = m.group(2).split(",")
+            filters[name] = filters.get(name, []) + values
+            if name not in filtered_dimensions:
+                filtered_dimensions.append(name)
+        else:
+            # "Dimension"
+            name = c
+            filters[name] = filters.get(name, []) + []
+            if name not in filtered_dimensions:
+                filtered_dimensions.append(name)
+
+    # Cons up the lists of items for all dimensions we have filters on.
+    dimension_values = {}
+    for d in filtered_dimensions:
+
+        c = flask.g.db.cursor()
+        q = """
+            SELECT DISTINCT "item"
+            FROM "odata_dataset_dimension_item"
+            WHERE
+            "dimension" = ?
+            ORDER BY lower("item");
+            """
+        r = c.execute(q, (d,))
+
+        items = {}
+        for i in r:
+            # Convert into a form suitable for OPTIONS.
+            items[i[0]] = i[0]
+
+        dimension_values[d] = items
+
+    # Find all the cubes that meet the criteria.
+    intersection = []
+    for d in filtered_dimensions:
+        q = """
+            SELECT "dataset"
+            FROM "odata_dataset_dimension"
+            WHERE
+            "dimension" = ?
+            """
+        intersection.append(q)
+    intersection = " INTERSECT ".join(intersection)
+
+    c = flask.g.db.cursor()
+    q = """
+        SELECT "dataset", "description"
+        FROM "odata_metadata_tag"
+        WHERE
+        "tag" = 'Title'
+        AND
+        "dataset" in (%s)
+        ORDER BY "dataset"
+        """ % intersection
+    r = c.execute(q, filtered_dimensions)
+
+    datasets = r.fetchall()
+
+    # Cons up the list of remaining dimensions. i.e. the subset of all
+    # dimensions that are used by the cubes we have currently filtered in.
+    remaining_dimensions = {}
+    c = flask.g.db.cursor()
+    q = ""
+    r = None
+
+    if (len(criteria) > 0):
+        # Return all the dimensions when we're just starting out.
+        q = """
+            SELECT DISTINCT "dimension"
+            FROM "odata_dataset_dimension"
+            WHERE
+            "dataset" in (%s)
+            ORDER BY lower("dimension");
+            """ % intersection
+        r = c.execute(q, filtered_dimensions)
+    else:
+        # Otherwise only show the dimensions that the filtered in cubes actually have.
+        q = """
+            SELECT DISTINCT "dimension"
+            FROM "odata_dataset_dimension"
+            ORDER BY lower("dimension");
+            """
+        r = c.execute(q)
+
+    for d in r:
+        # Convert into a form suitable for OPTIONS.
+        remaining_dimensions[d[0]] = d[0]
+
+
+    return render_request(
+            Title = "Cubes filtered by dimension criteria",
+            Main  = MAIN(
+                H1("A list of publications where..."),
+
+                TABLE(
+                    *[TR(  # A row for each filter.
+                        TD("and" if (d != filtered_dimensions[0]) else ""),
+                        # Name of the dimension.
+                        TD(d),
+                        TD(" is one of "),
+                        # The criteria applied to the dimension plus an extra one for adding a new critera.
+                        TD(
+                            *more_itertools.intersperse(
+                                BR(),
+                                (SELECT("v/%s" % d,
+                                    *OPTIONS(dimension_values[d], v),
+                                    OPTION("", (v == ""), ("(nothing else)" if (len(filters[d]) > 0) else "(any value)")),
+                                    ) for v in (filters[d] + [""])))),
+                                ) for d in filtered_dimensions],
+                    # An extra row for adding a new filter.
+                    TR(
+                        TD("and" if (len(filtered_dimensions) > 0) else ""),
+                        TD("there is information about ",
+                            SELECT("d",
+                                *OPTIONS(remaining_dimensions),
+                                OPTION("", True, "(pick something)")),
+                            colspan = 3))
+                    ),
+                ACTION("filter-cubes-by-dimension", "Apply Filter"),
+
+                BR(),
+
+                UL(
+                    *[LI(A("/render/%s" % d[0], "%s" % d[0]), ": ", d[1]) for d in datasets])
+                ))
+
+# Starting page for finding cubes that match a given criteria.
+@app.route("/filter-cubes-by-dimension/")
+def filter_cubes_by_dimension_0() -> str:
+    return filter_cubes_by_dimension("")
 
 
 ################################################################################
@@ -743,9 +897,50 @@ def specify_table(dataset = None, col = None, row = None, **kwargs):
         return redirect("render", dataset)
 
 
+# Converts a set of dimension and dimension/value filters into a URL that
+# displays that filter and its results.
+# v is a dictionary of dimension names to values to filter by.
+# d is a dimension name to add to the filter.
+# FIXME: Encode values so that [,()] can appear in dimension names and values.
+# FIXME: We don't sort dimension names or values so that things stay in "the
+#        same order" as the user specified them. But (a) we don't know that
+#        this actually preserves the order as the args are stored in a hash
+#        table and (b) this results in lots of URLs for the same criteria.
+# FIXME: We don't filter out non-unique values.
+def action_filter_cubes_by_dimension(v = {}, d = ""):
+
+    criteria = []
+
+    for (k,kv) in v.items():
+        values = []
+        if isinstance(kv, list):
+            for x in kv:
+                if x not in values:
+                    values.append(x)
+        else:
+            values = [kv]
+        values = list(filter(None,values))
+        if (len(values) > 0):
+            criteria.append("%s(%s)" % (k, ",".join(values)))
+        else:
+            criteria.append(k)
+
+    if isinstance(d, list):
+        for x in d:
+            if x not in v:
+                criteria.append(x)
+    else:
+        if d not in v:
+            criteria.append(d)
+
+    criteria = ";".join(filter(None, criteria))
+
+    return redirect("filter-cubes-by-dimension", criteria)
+
 # POST action dispatch table.
 actions = {
         "specify_table": specify_table,
+        "filter-cubes-by-dimension": action_filter_cubes_by_dimension,
         }
 
 @app.route('/', defaults={'path': ''}, methods=['POST'])

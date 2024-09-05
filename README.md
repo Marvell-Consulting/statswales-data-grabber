@@ -7,6 +7,7 @@ A small tool to get data from the existing StatsWales system
 ```
 $ pip3 install requests
 $ pip3 install Flask
+$ pip3 install more_itertools
 $ pip3 install zstandard
 ```
 
