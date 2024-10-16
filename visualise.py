@@ -706,6 +706,43 @@ def reference_table(dataset, dimension) -> str:
 
     col_types = ["symbol", "symbol", "symbol", "text", "text", "text", "text"]
 
+    # Filter stuff
+    c2 = flask.g.db.cursor()
+
+    q2 = """
+         SELECT
+         DISTINCT "dataset"
+         FROM "dataset_property_dimension"
+         WHERE "dimension" = ?;
+         """
+
+    r2 = c2.execute(q2, (dimension,))
+
+    c3             = flask.g.db.cursor()
+    c3.row_factory = sqlite3.Row
+
+    r3 = c3.execute("SELECT DISTINCT `dimension` FROM `dataset_dimension` WHERE `dataset` = ?;", (dataset,))
+
+    r3 = r3.fetchall()
+
+    dimensions = {}
+    for d in r3:
+        dimensions[d["dimension"]] = d["dimension"]
+
+    c4             = flask.g.db.cursor()
+    c4.row_factory = sqlite3.Row
+
+    r4 = c4.execute(q, (dataset, dimension))
+
+    items = {}
+    for i in r4:
+        items[i["item"]] = i["item"]
+
+
+
+
+    # End of filter stuff
+
     return render_request(
             Title = "%s Reference Table for %s" % (dimension, dataset),
             Main  = MAIN(
@@ -716,7 +753,29 @@ def reference_table(dataset, dimension) -> str:
                         TR(TH("Welsh"), TH("English"), TH("Welsh"), TH("English"))),
                     TBODY(
                         *[TR(*[TD() if (c is None) else TD("%s" % c, classes = ["s"] if (t == "symbol") else ["t"]) for c, t in zip(r, col_types)]) for r in r]),
-                )))
+                )
+                ,
+                H2("Find similar cubes where..."),
+                dimension, " = ",
+                SELECT("v/%s" % dimension,
+                    *OPTIONS(items),
+                    OPTION("", True, "(omit)"),
+                    ),
+                SELECT("v/%s" % dimension, *OPTIONS(items)),  BR(),
+                SELECT("d", *OPTIONS(dimensions, dimension),
+                    OPTION("", True, "(omit)"),
+                    ),
+                SELECT("d", *OPTIONS(dimensions, dimension)),
+                ACTION("filter-cubes-by-dimension", "Filter"),
+
+                H2("Other cubes using this dimension"),
+                UL(
+                    *[LI(x[0]) for x in r2],
+                    )
+
+
+                ))
+
 # Find all the cubes that match the given criteria.
 # Criteria is a list of dimension names and, optionally, possible values for
 # those dimensions.
@@ -936,6 +995,16 @@ def action_filter_cubes_by_dimension(v = {}, d = ""):
     criteria = ";".join(filter(None, criteria))
 
     return redirect("filter-cubes-by-dimension", criteria)
+
+#    return render_request(
+#            Title = "x",
+#            Main  = MAIN(
+#                UL(
+#                *[LI("v[", x, "] = ", v[x]) for x in v],
+#                LI("d = ", d)),
+#                criteria
+#                ))
+
 
 # POST action dispatch table.
 actions = {
