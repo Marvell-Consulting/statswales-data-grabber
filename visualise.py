@@ -36,7 +36,7 @@ import more_itertools
 ### Configuration.
 
 db_pool_size = 3
-db_file      = "statswales2.hypercube.sqlite"
+db_file      = "/var/spool/dam/bitbucket/stats-wales/statswales-data-grabber/snapshots/2024-05-01--2024-05-04/statswales2.hypercube.sqlite"
 
 
 ################################################################################
