@@ -29,6 +29,7 @@ import time
 import collections
 import urllib
 import re
+import itertools
 import more_itertools
 
 import widgets
