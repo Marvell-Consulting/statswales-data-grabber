@@ -1394,6 +1394,11 @@ def action_demo_update_filters(v = {}, d = "", **kwargs):
 
                 if ((c in v) and (v[c] == False)):
                     print ("v[%s] = %s" % (c, v[c]))
+                    # TODO: Fix things that don't work:
+                    #       Adding the same category again when it's alredy there with -Any- Key and some values
+                    #       Changing the key and the first value on the same submission for an otherwise fresh filter.
+                    # The category on it's own exists as a criteria. Upgrade that criteria to 
+                    #criteria.remove(c)
                     criteria.append(x)
                 else:
                     criteria.append(x)
