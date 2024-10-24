@@ -33,6 +33,7 @@ import more_itertools
 
 import widgets
 from widgets_html import *
+import widgets_govwales as WG
 
 
 ################################################################################
@@ -214,6 +215,19 @@ def render_request(Title = None, Menu = None, Main = None, Footer = None):
                     BR(),
                     widgets.format_ns(thread_time),  " (sys+user cpu)")))
 
+# Renders a complete page in the style of the Welsh Government based on the
+# PAGE widget and optional caller-supplied inserts.
+# This is a place to specify application-wide defaults for various parts of the
+# page.
+def render_wg_request(Lang = None, Home = None, Phase = "Beta", Menu = None, **kwargs):
+
+    return WG.render_request(
+            Lang  = Lang,
+            Home  = Home,
+            Phase = Phase,
+            Menu  = Menu,
+            **kwargs)
+
 
 ################################################################################
 ### HTTP Views: GET Request routers and dispatchers.
@@ -275,6 +289,10 @@ def hello() -> str:
 @app.route("/visualise.css")
 def stylesheet() -> str:
     return flask.send_from_directory(".", "visualise.css")
+
+@app.route("/widgets_govwales/<f>")
+def widgets_govwales(f) -> str:
+    return flask.send_from_directory("./widgets_govwales", f)
 
 # Display lists of datasets by the count of the number of dimensions they have.
 @app.route("/by-dimension-count/<n>")
