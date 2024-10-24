@@ -192,6 +192,7 @@ def render_request(Title = None, Menu = None, Main = None, Footer = None):
         Menu = MENU(
                 ("/", "Datasets"),
                 ("/filter-cubes-by-dimension/", "Filters"),
+                ("/demo", "Consumer Demo"),
                 )
 
     if (Main is None):
@@ -360,6 +361,479 @@ def wg() -> str:
                         )
 
                 ))
+
+# Starting page for consumer filter demo.
+@app.route("/demo")
+def demo() -> str:
+    return redirect("demo", "")
+
+# Consumer filter demo for testing with participants on 2024/10/21.
+@app.route("/demo/")
+def demo_0() -> str:
+
+    lang = flask.g.lang
+    c    = flask.g.db.cursor()
+
+    r = c.execute("""SELECT "category", "description", "notes" FROM "lut_category_info" WHERE "lang" = ?""", (lang,))
+
+    return render_wg_request(
+            Title = "Consumer Filter Demo",
+            Home = "/demo",
+            Main = WG.MAIN(
+                WG.GRID_ROW(
+                    WG.GRID_COL("full",
+                        WG.H1(_("StatsWales"),
+                            caption = _("Find statistics and data from the Welsh Government")),
+                        )),
+
+                H3(_("Filter by category")),
+                *[WG.GRID_ROW(
+                    *[(WG.TOPIC(title, "./search/" + href, description if (description != "") else (_("Information about") + " " + title)) if (href != None) else DIV({})) for (href, title, description) in x])
+                    for x in itertools.zip_longest(*(iter(r),) * 3, fillvalue= (None, None, None))],
+                WG.GRID_ROW(
+                    WG.DATASET_TIMELINE("Published recently", [
+                        ("Primary and secondary grassland, woodland and crop fires", "", "14/3/2024"),
+                        ("Fatal and non-fatal casualties by quarter", "", "14/3/2024"),
+                        ("Deliberate fires by quarter", "", "14/3/2024"),
+                        ("Value of exports by quarter and UK region (£m)", "", "13/3/2024"),
+                        ("Value of Welsh exports by quarter and product (£m)", "", "13/3/2024"),
+                        ]),
+                    WG.DATASET_TIMELINE("Most popular", [
+                        ("Population estimates by local authority and year", "", "1/12/2023"),
+                        ("Ethnicity by area and ethnic group", "", "14/3/2024"),
+                        ("Employment rate by Welsh local area, year and gender", "", "13/5/2023"),
+                        ("Children looked after at 31 March by local authority, gender and age", "", "19/12/2023"),
+                        ("Pupils eligible for free school meals by local authority, region and year", "", "9/3/2023"),
+                        ])
+
+                        )
+
+                ))
+
+# Criteria editor for consumer filter demo.
+# Find all the cubes that match the given criteria.
+# Criteria is a list of category names and, optionally, keys and possible
+# values for those categories.
+# criteria - Category(Value,value...);Category:Key(Value,value...);Category;Category:Key;...
+# FIXME: Decode values so that [,()] can appear in category names, keys and values.
+@app.route("/demo/search/<criteria>")
+def demo_search(criteria) -> str:
+
+    lang = flask.g.lang
+    c    = flask.g.db.cursor()
+
+    criteria_list = list(filter(None, criteria.split(";")))
+
+    # Regex to match and bind "Category:Key(Value...)".
+    p = re.compile(r"^([^(]*)\(([^)]*)\)$")
+
+    filtered_dimensions = []
+    filters             = {}
+
+    for c in criteria_list:
+        m = p.match(c)
+        if m != None:
+            # "Dimension(Value...)"
+            name          = m.group(1)
+            values        = m.group(2).split(",")
+            filters[name] = filters.get(name, []) + values
+            if name not in filtered_dimensions:
+                filtered_dimensions.append(name)
+        else:
+            # "Dimension"
+            name = c
+            filters[name] = filters.get(name, []) + []
+            if name not in filtered_dimensions:
+                filtered_dimensions.append(name)
+
+    # LUT is a string encoded as "<Category>:<Key>".
+    def fetch_items_for_lut(lut):
+
+        lut    = lut.split(":")
+        length = len(lut)
+
+        c = flask.g.db.cursor()
+
+        q = """
+            SELECT
+            DISTINCT "ld"."item_id", "li"."description"
+            FROM
+            "lut_category_key" AS "lk",
+            "lut_reference_data" AS "ld",
+            "lut_reference_data_info" AS "li"
+            WHERE
+            "ld"."category_key" = "lk"."category_key"
+            AND "li"."item_id" = "ld"."item_id"
+			AND "li"."category_key" = "ld"."category_key"
+			AND "li"."lang" = ?1
+            """
+
+        if (length >= 1):
+            q += """
+                AND "lk"."category" = ?2
+                """
+
+        if (length >= 2):
+            q += """
+                AND "lk"."category_key" = ?2 || "/" || ?3
+                """
+
+        if (length >= 3):
+            raise AssertionError("LUT contains too many parts")
+
+        q += """
+            ORDER BY "li"."description"
+            """
+
+        r = c.execute(q, (lang, *lut))
+
+        return r
+
+    # Cons up the lists of items for all dimensions we have filters on.
+    dimension_values = {}
+    for d in filtered_dimensions:
+
+        r = fetch_items_for_lut(d)
+
+
+        # Arrange the results in a form suitable for OPTIONS.
+        # A dictionary of keys to localised strings.
+        # The keys are a ; separated list of all items with the same localised string.
+        # Relies on r being sorted by description.
+
+        items     = {}
+        prev_id   = None
+        prev_desc = None
+        for i in r:
+
+            curr_id   = i[0]
+            curr_desc = i[1]
+
+            new_id    = None
+
+            if (prev_desc == curr_desc and True):
+
+                # Group IDs that have the same localised text together so that
+                # selecting the localised version returns a list of all items
+                # with that ID.
+
+                del items[prev_id]
+                new_id        = prev_id + ";" + curr_id
+                items[new_id] = prev_desc  ## OPTIONS structure.
+
+                prev_id = new_id
+                #print("%s -> %s" % (curr_desc, new_id))
+
+            else:
+
+                # We've not seen an item with this description before.
+
+                new_id        = curr_id
+                items[new_id] = curr_desc  # OPTIONS Structure.
+                prev_id       = new_id
+                prev_desc     = curr_desc
+
+
+        # Store these items against the category they relate to.
+        dimension_values[d] = items
+
+
+    # Work out what criteria are still possible.
+    # This is supposed to check what types of dimensions datasets in the
+    # result-set have and limit it to just those but we can't do that
+    # efficiently until we have category_key type annotations for each
+    # dimension.
+    # So, for now, always list everything.
+    # This may mean the user can easily construct filters that lead to zero
+    # results.
+
+    c = flask.g.db.cursor()
+    q = """
+        SELECT
+        "category",
+        "description"
+        FROM "lut_category_info"
+        WHERE "lang" = ?
+        """
+    r = c.execute(q, (lang,))
+
+    remaining_dimensions = {}
+    for r in r:
+
+        category    = r[0]
+        description = r[1]
+
+        remaining_dimensions[category] = description
+
+
+    # TODO: Decode the category / key / value data and display it in the three columns of each Step.
+    # Rearrange the criteria into a tree of Category->Key->Value.
+    # When rendering, if there's no key, get the list of candidates from the db
+    # when rendering, if there's a key and no value, get the list of candidates from the db.
+    # if there's no key then get all values for the whole category
+
+
+    # Find all the cubes that meet the criteria.
+
+    c = flask.g.db.cursor()
+
+    # Parameters to be bound to the generated query.
+    parameters   = []
+    parameters.append(lang)
+
+    intersection = []
+    for d in filtered_dimensions:
+
+        lut    = d.split(":")
+        length = len(lut)
+
+        q = """
+            SELECT
+            DISTINCT
+            oi.dataset
+            FROM
+            lut_category_key AS lk,
+            lut_reference_data AS ld,
+            odata_dataset_dimension_item AS oi
+            WHERE
+            ld.category_key = lk.category_key
+            AND oi.item = ld.item_id
+            """
+        if (length >= 1):
+            q += """
+                AND "lk"."category" = ?
+                """
+            parameters.append(lut[0])
+
+        if (length >= 2):
+            q += """
+                AND "lk"."category_key" = ? || "/" || ?
+                """
+            parameters.append(lut[0])
+            parameters.append(lut[1])
+
+        intersection.append(q)
+
+    intersection = " INTERSECT ".join(intersection)
+
+    q = """
+         SELECT
+         DISTINCT
+        "h"."dataset",
+        "h"."topic",
+        "t"."description",
+        "d"."description"
+        FROM
+        (SELECT
+        "dataset",
+        substr(hierarchy_path, 0 , instr(hierarchy_path, "/")) AS "topic"
+        FROM "odata_catalogue_info"
+        WHERE "lang" = ?
+        AND "dataset" in (%s)
+        ) AS "h"
+        LEFT JOIN "odata_metadata_tag" AS "t"
+        ON "h"."dataset" = "t"."dataset"
+        LEFT JOIN "odata_metadata_tag" AS "d"
+        ON "h"."dataset" = "d"."dataset"
+        WHERE
+        "t"."lang" = ?
+        AND "t"."tag" = ?
+        AND "d"."lang" = ?
+        AND "d"."tag" = ?
+        ORDER BY "topic"
+        """ % intersection
+
+    parameters.append(lang)
+    parameters.append("Title" if (lang == "en-gb") else "Teitl")
+    parameters.append(lang)
+    parameters.append("Last update" if (lang == "en-gb") else "Diweddariad nesaf")
+
+    q = c.execute(q, parameters)
+
+    results = {}
+    count   = 0
+    for r in q:
+        count += 1
+
+        dataset = r[0]
+        topic   = r[1]
+        title   = r[2]
+        updated = r[3]
+
+        #uri = "./" + criteria + "/" + dataset
+        # Always link to Andy's prototype of WIMD1901.
+        uri = "https://statswales-prototype.ashysand-42d8a180.ukwest.azurecontainerapps.io/consumers-v3/dataset"
+
+        l = results.get(topic, list())
+        l.append((title, uri, updated))
+        results[topic] = l
+
+    topics = sorted(results.keys())
+
+
+    # Render the filters.
+
+    wg_filters = []
+    n          = 0
+    for f in filtered_dimensions:
+        step     = None
+        category = None
+        key      = None
+        values   = None
+
+        step = SPAN({}, _("STEP"), " ", n + 1)
+
+        lut    = f.split(":")
+        length = len(lut)
+
+        # Look up the localised name for the category.
+
+        category = lut[0]
+        c = flask.g.db.cursor()
+        q = """
+            SELECT
+            "description"
+            FROM "lut_category_info"
+            WHERE "lang" = ?
+            AND "category" = ?
+            """
+        r = c.execute(q, (lang, category))
+        r = r.fetchall()
+        if (len(r) != 1):
+            category = SPAN({}, EM("--***-- ", _("Unknown"), " --***--"), " (%s" % (category), ")")
+        else:
+            category = r[0][0]
+
+        # Look up the localised name for the category_key.
+
+        if (length == 1):
+            # No category_key has been specified yet.
+            # If values are already selected then say "-Any-", otherwise
+            # populate a dropdown.
+            n_filters   = len(filters[f])
+
+            if (n_filters == 0):
+                # Generate localised dropdown.
+                c = flask.g.db.cursor()
+                q = """
+                    SELECT
+                    "k"."category",
+                    substr("k"."category_key", instr("k"."category_key", "/") + 1) AS "key",
+                    "i"."description"
+                    FROM "lut_category_key" AS "k"
+                    LEFT JOIN "lut_category_key_info" AS "i"
+                    ON "i"."category_key" = "k"."category_key"
+                    WHERE "i"."lang" = ?
+                    AND "k"."category" = ?
+                    """
+
+                r = c.execute(q, (lang, lut[0]))
+                r = r.fetchall()
+
+                keys = {}
+                for r in r:
+
+                    c = r[0]
+                    k = r[1]
+                    d = r[2]
+
+                    keys["%s:%s" % (c, k)] = d
+
+                key = SELECT("d",
+                        *OPTIONS(keys),
+                        OPTION("", True, "(pick something)"))
+
+            else:
+                # No dropdown.
+                key = "-%s-" % _("Any")
+
+        if (length == 2):
+            # A particular category_key has been selected.
+            key = lut[1]
+
+            c = flask.g.db.cursor()
+            q = """
+                SELECT
+                "description"
+                FROM lut_category_key_info
+                WHERE "lang" = ?
+                AND "category_key" = ? || "/" || ?
+                """
+            r = c.execute(q, (lang, lut[0], key))
+            r = r.fetchall()
+            if (len(r) != 1):
+                key = SPAN({}, EM("--***-- ", _("Unknown"), " --***--"), " (%s" % (key), ")")
+            else:
+                key = r[0][0]
+
+
+        # This only works when we have a category and a key (e.g. Geog:LA) in
+        # category_key because dimension_values for categories can have codes
+        # that are grouped together due to duplicates with the same localised
+        # name for different keys.
+        def code_to_localised_name(dimension_values, category_key, item_id):
+            return dimension_values.get(category_key).get(item_id, SPAN({}, EM("--***-- ", _("Unknown"), " --***--"), " (%s:%s" % (category_key, item_id), ")"))
+
+        values =  [LI(
+            code_to_localised_name(dimension_values, f, v),
+            HIDDEN("v/%s" % f, v),
+            SPAN({"class": "float-right"}, A("#", _("Remove")))
+
+            ) for v in filters[f]]
+        values.append(LI(SELECT("v/%s" % f,
+                    *OPTIONS(dimension_values[f], None),
+                    OPTION("", True, ("(nothing else)" if (len(filters[f]) > 0) else "(any value)")),
+                    )))
+        values = UL(*values)
+
+        wg_filters.append((step, category, key, values))
+        n += 1
+
+
+    # Generate the page.
+
+    return render_wg_request(
+            Title = "Filter By Category : Consumer Filter Demo",
+            Home = "/demo",
+            Main = WG.MAIN(
+                WG.GRID_ROW(
+                    WG.GRID_COL("two-thirds",
+                        WG.H1(_("Search for datasets")),
+                        )),
+
+                H3(_("Your Filters")),
+                P(_("Choose the topic, dataset, dimensions and time period you want to view. You'll then be able to view the table and download the data.")),
+                P(criteria),
+
+                WG.FILTERS(
+                    *[WG.FILTER(step, category, key, values) for (step, category, key, values) in wg_filters],
+                    # An extra row for adding a new filter.
+                    WG.TR(
+                        element("td", {"class": "govuk-table__cell", "style": "width: 120px;"},
+                            SPAN({"class": "badge"}, _("AND") if (len(filtered_dimensions) > 0) else "STEP 1")),
+                        WG.TD("there is information about ",
+                            SELECT("d",
+                                *OPTIONS(remaining_dimensions),
+                                OPTION("", True, "(pick something)")),
+                            colspan = 3)
+                        )),
+                SPAN({"class": "float-right"}, WG.ACTION("dbg", "dbg"), WG.ACTION("demo-update-filters", _("Update Filters"), classes = ["secondary", "blue"])),
+
+                H3(_("Results by topic"), " (", "{:,}".format(count), " ", _("results"), ")"),
+                *[WG.GRID_ROW(
+                    *[(WG.DATASET_TIMELINE(topic,
+                        results[topic]
+                        ) if (topic != None) else DIV({})) for topic in t])
+                    for t in itertools.zip_longest(*(iter(topics),) * 2, fillvalue= None)],
+
+
+                ))
+
+# Alternative starting page for finding cubes that match a given criteria
+# during consumer demo.
+@app.route("/demo/search/")
+def demo_search_0() -> str:
+    return demo_search("")
 
 # Support files
 @app.route("/visualise.css")
