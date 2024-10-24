@@ -31,6 +31,9 @@ import urllib
 import re
 import more_itertools
 
+import widgets
+from widgets_html import *
+
 
 ################################################################################
 ### Configuration.
@@ -60,17 +63,6 @@ def format_ordinal(n):
         if (1 <= m <= 3):
             suffix = ["st","nd","rd"][m - 1]
     return "%s%s" % (n, suffix)
-
-
-# Formats a count of nanoseconds into an appropriate number of ns, us, ms or s.
-def format_ns(s):
-
-    i = 0
-    while ((s >= 1000) and (i < 3)):
-        s /= 1000.0
-        i += 1
-
-    return "%s%s" % (f'{s:.1f}', ["ns", "μs", "ms", "s"][i])
 
 
 
@@ -112,51 +104,8 @@ def SQL_SELECT(table, columns, *args):
 ################################################################################
 ### HTML generation.
 
-# Construct the XML structure for an element and its contents.
-# Test cases:
-#   visualise.elements_to_str(visualise.element("P", {}, "this is a test"))
-#     -> b'<P>this is a test</P>
-#   visualise.elements_to_str(visualise.element("P", {}, "this is", "a test"))
-#     -> b'<P>this isa test</P>
-#   visualise.elements_to_str(visualise.element("P", {}, "this is", visualise.element("i", {}, "a"), "test"))
-#     -> b'<P>this is<i>a</i>test</P>
-def element(tag, attribs = {}, *contents):
-    e = xml.etree.ElementTree.Element(tag, attribs)
+element = widgets.element
 
-    prev  = None
-    first = True
-    for c in contents:
-        if (first == True):
-            if (isinstance(c, (xml.etree.ElementTree.Element,))):
-                e.append(c)
-                prev = c
-            else:
-                e.text = str(c)
-                prev  = e
-            first = False
-        else:
-            if (not isinstance(c, (xml.etree.ElementTree.Element,))):
-                if (prev == e):
-                    p = prev.text
-                else:
-                    p = prev.tail
-                if (isinstance(p, str)):
-                    p += str(c)
-                else:
-                    p = str(c)
-                if (prev == e):
-                    prev.text = p
-                else:
-                    prev.tail = p
-            else:
-                e.append(c)
-                prev = c
-
-    return e
-
-
-def elements_to_str(elements):
-    return xml.etree.ElementTree.tostring(elements, encoding='utf-8', method='html')
 
 # Safely redirects to the specified URL by ensuring the path elements are
 # properly encoded.
@@ -166,167 +115,6 @@ def redirect(*path):
     path = "/" + "/".join(path)
 
     return flask.redirect(path, code = 302)
-
-
-## Lo-level HTML elements.
-
-def HTML(*contents):
-    return element("html", {}, *contents)
-
-def HEAD(*contents):
-    return element("head", {}, *contents)
-
-def META(key, value):
-    return element("meta", {key: value})
-
-def TITLE(*title):
-    return element("title", {}, *title)
-
-def BODY(*contents):
-    return element("body", {}, *contents)
-
-def A(href, *contents):
-    return element("a", {"href": href}, *contents)
-
-def P(*contents):
-    return element("p", {}, *contents)
-
-def BR():
-    return element("br", {})
-
-def SPAN(*contents):
-    return element("span", {}, *contents)
-
-def IMG(src):
-    return element("img", {"src": src})
-
-def H1(*contents):
-    return element("h1", {}, *contents)
-
-def H2(*contents):
-    return element("h2", {}, *contents)
-
-def UL(*contents):
-    return element("ul", {}, *contents)
-
-def OL(*contents):
-    return element("ol", {}, *contents)
-
-def LI(*contents):
-    return element("li", {}, *contents)
-
-def TABLE(*contents, classes = []):
-    if (len(classes) == 0):
-        return element("table", {}, *contents)
-    else:
-        return element("table", {"class": ", ".join(classes),}, *contents)
-
-def THEAD(*contents):
-    return element("thead", {}, *contents)
-
-def TBODY(*contents):
-    return element("tbody", {}, *contents)
-
-def TR(*contents):
-    return element("tr", {}, *contents)
-
-def TH(*contents, colspan = None, rowspan = None):
-    attribs = {}
-    if (colspan != None):
-        attribs["colspan"] = str(colspan)
-    if (rowspan != None):
-        attribs["rowspan"] = str(rowspan)
-    return element("th", attribs, *contents)
-
-#def TD(*contents, classes = []):
-#    if (len(classes) == 0):
-#        return element("td", {}, *contents)
-#    else:
-#        return element("td", {"class": ", ".join(classes),}, *contents)
-def TD(*contents, colspan = None, classes = []):
-    attribs = {}
-    if (colspan != None):
-        attribs["colspan"] = str(colspan)
-    if (len(classes) > 0):
-        attribs["classes"] = ", ".join(classes)
-    return element("td", attribs, *contents)
-
-def FORM(*contents, enctype = "application/x-www-form-urlencoded"):
-    return element("form",
-            {
-                "method": "POST",
-                "accept-charset": "utf-8",
-                "enctype": enctype,
-                "action": "",
-                },
-            *contents)
-
-def INPUT(type, name, value):
-    return element("input",
-            {
-                "type": type,
-                "name": name,
-                "value": value,
-                })
-
-def OPTION(value, selected, *contents):
-    if selected:
-        return element("option", {"value": value, "selected": ""}, *contents)
-    else:
-        return element("option", {"value": value}, *contents)
-
-def SELECT(name, *contents):
-    return element("select", {"name": name}, *contents)
-
-
-## Lo-level HTML5 elements.
-
-# The main content of the page
-def MAIN(*contents):
-    return element("main", {}, *contents)
-
-def HEADER(*contents):
-    return element("header", {}, *contents)
-
-def FOOTER(*contents):
-    return element("footer", {}, *contents)
-
-
-## Helpers for Lo-level HTML & HTML5 elements.
-
-# Takes a dictionary and returns it as a list of OPTIONs.
-# Marks the appropriate OPTION as selected.
-def OPTIONS(options, selected = None):
-    return [OPTION(k, (selected == k), v) for k,v in options.items()]
-
-def HIDDEN(name, value):
-    return INPUT("hidden", name, value)
-
-def NAV(items):
-    return element("nav",
-            *[A(href, text) for href, text in items])
-
-
-## Higher level widgets to support the app server.
-
-# One per page.
-def PENULTIMATE_FORM(*contents, csrf_token = None):
-    return FORM(
-            element("input", {"type": "submit", "disabled": ""}),  # Prevent Enter from submitting forms.
-            *([HIDDEN("csrf-token", csrf_token)] if csrf_token else []),
-            *contents)
-
-# For delimiting logical sub-forms within a page.
-def LOGICAL_FORM(name, *contents):
-    return element("__logical_form__", {"name": name}, *contents)
-
-# A submit button for a form.
-def ACTION(action, *contents):
-    return element("button", {
-        "type": "submit",
-        "name": "action",
-        "value": action,
-        }, *contents)
 
 
 ## Application level widgets.
@@ -411,7 +199,7 @@ def render_request(Title = None, Menu = None, Main = None, Footer = None):
     perf_counter -= flask.g.start_perf_counter
     thread_time  -= flask.g.start_thread_time
 
-    return elements_to_str(
+    return widgets.elements_to_str(
             PAGE(Title,
                 HEADER(
                     LOGO(),
@@ -419,9 +207,9 @@ def render_request(Title = None, Menu = None, Main = None, Footer = None):
                 Main,
                 FOOTER(
                     *Footer,
-                    format_ns(perf_counter), " (wallclock)",
+                    widgets.format_ns(perf_counter), " (wallclock)",
                     BR(),
-                    format_ns(thread_time),  " (sys+user cpu)")))
+                    widgets.format_ns(thread_time),  " (sys+user cpu)")))
 
 
 ################################################################################
