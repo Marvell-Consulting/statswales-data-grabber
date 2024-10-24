@@ -888,7 +888,7 @@ def before_request():
     flask.g.start_thread_time = time.thread_time_ns()
 
     # Get a database handle from the pool.
-    flask.g.db = db_pool.get(block = False)
+    flask.g.db = db_pool.get(block = True)
 
 # Things to do at the end of each HTTP Request.
 @app.teardown_request
