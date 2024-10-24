@@ -875,7 +875,7 @@ def teardown_request(err):
     # Return the database handle to the pool.
     db         = flask.g.db
     flask.g.db = None
-    db_pool.put(db, block = False)
+    db_pool.put(db, block = True)
 
 
 ################################################################################
