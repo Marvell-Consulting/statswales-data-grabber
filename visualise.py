@@ -292,6 +292,74 @@ def hello() -> str:
                             )) for x in r],
                         )))
 
+# WG test.
+@app.route("/wg")
+def wg() -> str:
+    return render_wg_request(
+            Title = "bus rabbit",
+            Home = "/wg",
+            Main = WG.MAIN(
+                WG.GRID_ROW(
+                    WG.GRID_COL("full",
+                        WG.H1(_("StatsWales"),
+                            SPAN({"class": "float-right"}, element("button", {"class": "secondary blue"}, "Sign in")),
+                            caption = _("Find statistics and data from the Welsh Government")),
+                        WG.SEARCH_BANNER("Search for Welsh Statistics"),
+                        )),
+                WG.GRID_ROW(
+                    WG.GRID_COL("one-half",
+                        WG.ARTICLE("Browse data",
+                            "Browse all datasets available on StatsWales",
+                            A("browse-list", "Browse all datasets"))),
+                    WG.GRID_COL("one-half",
+                        WG.ARTICLE("Build your own table",
+                            "Select a dataset and build your own table",
+                            A("build-step-logic", "Build your own table")))),
+
+                H3("Browse by topic"),
+                *[WG.GRID_ROW(
+                    *[(WG.TOPIC(title, href, description) if (title != None) else DIV({})) for (title, href, description) in x])
+                    for x in itertools.zip_longest(*(iter([
+                        ("Agriculture", "", "Information about agricultural land, livestock and farm workers."),
+                        ("Business, economy and labour market", "", "Business, economy and labour market statistical data."),
+                        ("Census", "", "Statistical data from the Census."),
+                        ("Community safety and social inclusion", "", "Including fire and crime, poverty (HBAI) and deprivation (WIMD), and Communities First."),
+                        ("Education and skills", "", "Statistics on education, training and skills from pre-school to school, through to Further and Higher Education and Adult and Community learning."),
+                        ("Environment and countryside", "", "Topics such as waste, climate change and land."),
+                        ("Equality and diversity", "", "Data and analysis of protected charactistics and other associated characteristics."),
+                        ("Health and social care", "", "Information on health, health services and social services, including NHS primary and community activity, waiting times and NHS staff."),
+                        ("Housing", "", "Statistical information on all aspects of housing in Wales."),
+                        ("Local government", "", "Statistical information on the finances and national strategic indicators for local government"),
+                        ("National Survey for Wales", "", "Statistics from the National Survey for Wales, covering a range of topics such as wellbeing and people’s views on public services."),
+                        ("Population and migration", "", "Covers topics such as estimates and projections of population and estimates of migration."),
+                        ("Sustainable development", "", "Measures of everyday concerns including health, housing, jobs, crime, education and our environment."),
+                        ("Taxes devolved to Wales", "", "Statistics for collecting and managing the first devolved Welsh taxes."),
+                        ("Tourism", "", "Statistics are related to all aspects of tourism."),
+                        ("Transport", "", "Statistics on all aspects of transport."),
+                        ("Well-being", "", "Data on health and wellbeing for children."),
+                        ("Welsh Government", "", "Information relating to Welsh Government."),
+                        ("Welsh language", "", "Statistical information on the Welsh language skills of people in Wales, and their use of the language."),
+                        ]),) * 3, fillvalue= (None, None, None))],
+                WG.GRID_ROW(
+                    WG.DATASET_TIMELINE("Published recently", [
+                        ("Primary and secondary grassland, woodland and crop fires", "", "14/3/2024"),
+                        ("Fatal and non-fatal casualties by quarter", "", "14/3/2024"),
+                        ("Deliberate fires by quarter", "", "14/3/2024"),
+                        ("Value of exports by quarter and UK region (£m)", "", "13/3/2024"),
+                        ("Value of Welsh exports by quarter and product (£m)", "", "13/3/2024"),
+                        ]),
+                    WG.DATASET_TIMELINE("Most popular", [
+                        ("Population estimates by local authority and year", "", "1/12/2023"),
+                        ("Ethnicity by area and ethnic group", "", "14/3/2024"),
+                        ("Employment rate by Welsh local area, year and gender", "", "13/5/2023"),
+                        ("Children looked after at 31 March by local authority, gender and age", "", "19/12/2023"),
+                        ("Pupils eligible for free school meals by local authority, region and year", "", "9/3/2023"),
+                        ])
+
+                        )
+
+                ))
+
 # Support files
 @app.route("/visualise.css")
 def stylesheet() -> str:
