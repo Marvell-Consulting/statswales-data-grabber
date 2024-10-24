@@ -1355,6 +1355,58 @@ def action_filter_cubes_by_dimension(v = {}, d = ""):
 
     return redirect("filter-cubes-by-dimension", criteria)
 
+# Converts a set of dimension and dimension/value filters into a URL that
+# displays that filter and its results.
+# v is a dictionary of dimension names to values to filter by.
+# d is a dimension name to add to the filter.
+# FIXME: Encode values so that [,()] can appear in dimension names and values.
+# FIXME: We don't sort dimension names or values so that things stay in "the
+#        same order" as the user specified them. But (a) we don't know that
+#        this actually preserves the order as the args are stored in a hash
+#        table and (b) this results in lots of URLs for the same criteria.
+# FIXME: We don't filter out non-unique values.
+# Adapted from action_filter_cubes_by_dimension so that it works with the
+# multi-valued selections in dimension items.
+def action_demo_update_filters(v = {}, d = "", **kwargs):
+
+    criteria = []
+
+    for (k,kv) in v.items():
+        values = []
+        if isinstance(kv, list):
+            for x in kv:
+                if x not in values:
+                    values.append(x)
+        else:
+            values = [kv]
+        values = list(filter(None,values))
+        if (len(values) > 0):
+            criteria.append("%s(%s)" % (k, ",".join(values)))
+        else:
+            criteria.append(k)
+
+    if isinstance(d, list):
+        for x in d:
+            if x not in v:
+                # Extract the category.
+                c = x.split(":")[0]
+                print("c: %s, v: %s" % (c, v))
+
+                if ((c in v) and (v[c] == False)):
+                    print ("v[%s] = %s" % (c, v[c]))
+                    criteria.append(x)
+                else:
+                    criteria.append(x)
+    else:
+        raise("d is not a list")
+        if d not in v:
+            criteria.append(d)
+
+    criteria = ";".join(filter(None, criteria))
+
+    return redirect("demo", "search", criteria)
+
+
 #    return render_request(
 #            Title = "x",
 #            Main  = MAIN(
@@ -1387,6 +1439,7 @@ actions = {
         "specify_table": specify_table,
         "filter-cubes-by-dimension": action_filter_cubes_by_dimension,
         "set-lang": action_set_lang,
+        "demo-update-filters": action_demo_update_filters,
         }
 
 @app.route('/', defaults={'path': ''}, methods=['POST'])
