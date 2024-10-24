@@ -116,6 +116,9 @@ def redirect(*path):
 
     return flask.redirect(path, code = 302)
 
+# Returns the user to the page they came from.
+def redisplay():
+    return flask.redirect("", code = 302)
 
 ## Application level widgets.
 
