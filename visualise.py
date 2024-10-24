@@ -891,10 +891,48 @@ def penultimate_form_handler(_):
     (form_action, form_tree) = form_actions[0]
     form_action              = actions.get(form_action)
 
-    if (form_action == None):
-        return ("Specified action not found!", 404)
+    def show_error(e):
 
-    return form_action(**form_tree)
+        def dict_to_table(d):
+            return element("table", {"border": "1", "style": "border-collapse: collapse;"},
+                    *[TR(TD(k), TD(v) if (not isinstance(v, dict)) else TD(dict_to_table(v))) for k, v in d.items()])
+
+        error  = None
+        status = None
+
+        if (e is None):
+            error  = [H1("Specified action not found!")]
+            status = 404
+        else:
+            error = [
+                    H1("Action threw exception"),
+                    P(e)
+                    ]
+            status = 500
+
+        return (render_request(
+            Title = "Form Submission Error",
+            Menu  = DIV({}),
+            Main = MAIN(
+                *error,
+                H2("Data from active form"),
+                element("table", {"border": "1"},
+                    TR(TD("form_action"), TD(form_actions[0][0])),
+                    TR(TD("form_tree"),   TD(dict_to_table(form_tree)))),
+                H2("Data from all logical forms"),
+                dict_to_table(flask.request.form.to_dict(flat = False))
+
+            )),
+                status)
+
+    if (form_action == None):
+        return show_error(None)
+    else:
+        try:
+            r = form_action(**form_tree)
+            return r
+        except Exception as e:
+            return show_error(e)
 
 
 ################################################################################
