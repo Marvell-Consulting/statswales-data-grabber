@@ -35,6 +35,8 @@ import widgets
 from widgets_html import *
 import widgets_govwales as WG
 
+from i18n import _
+
 
 ################################################################################
 ### Configuration.
