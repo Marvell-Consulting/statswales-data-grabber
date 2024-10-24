@@ -221,6 +221,11 @@ def render_request(Title = None, Menu = None, Main = None, Footer = None):
 # page.
 def render_wg_request(Lang = None, Home = None, Phase = "Beta", Menu = None, **kwargs):
 
+    if (Lang is None):
+        # flask.g is only available when a request is in flight so cannot be a
+        # keywork argument default.
+        Lang = flask.g.lang
+
     return WG.render_request(
             Lang  = Lang,
             Home  = Home,
@@ -814,11 +819,29 @@ def action_filter_cubes_by_dimension(v = {}, d = ""):
 #                criteria
 #                ))
 
+def action_set_lang(lang = None):
+
+    TEN_YEARS = 60 * 60 * 24 * 365.25 * 10
+
+    if lang in ["en-gb", "cy-gb"]:
+
+        @flask.after_this_request
+        def set_lang(response):
+            response.set_cookie("lang", lang, TEN_YEARS)
+            return response
+
+        return redisplay()
+
+    else:
+
+        return ("Bad request: language must be 'en-gb' or 'cy-gb'!", 400)
+
 
 # POST action dispatch table.
 actions = {
         "specify_table": specify_table,
         "filter-cubes-by-dimension": action_filter_cubes_by_dimension,
+        "set-lang": action_set_lang,
         }
 
 @app.route('/', defaults={'path': ''}, methods=['POST'])
@@ -889,6 +912,13 @@ def before_request():
 
     # Get a database handle from the pool.
     flask.g.db = db_pool.get(block = True)
+
+    # Work out if the user has specified a preferred language.
+    lang = flask.request.cookies.get("lang")
+    if lang in ["en-gb", "cy-gb"]:
+        flask.g.lang = lang
+    else:
+        flask.g.lang = "en-gb"
 
 # Things to do at the end of each HTTP Request.
 @app.teardown_request
